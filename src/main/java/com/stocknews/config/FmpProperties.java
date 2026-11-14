@@ -12,5 +12,6 @@ public class FmpProperties {
     private String apiKey;
     private int dailyRequestLimit = 250;
     private boolean usExchangesOnly = true;
-    private int profileCacheHours = 24;
+    /** Time zone that defines "today" when deciding whether a saved profile is fresh. */
+    private String profileRefreshTimeZone = "America/Chicago";
 }

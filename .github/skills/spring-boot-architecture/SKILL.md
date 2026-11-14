@@ -19,10 +19,12 @@ application-wide conventions, affects deployment topology, or introduces a new s
   formatting, and notification delivery; `notification` owns channel-specific delivery.
 - PostgreSQL is the application datasource. H2 is configured for tests only; there is no production
   H2 mirror in the current architecture.
-- For local development, `compose.yaml` runs Spring Boot with the official PostgreSQL image from
-  Docker Hub, persists database state in a named volume, and binds the host port to loopback. The app
-  uses Compose DNS (`postgres:5432`); a Spring Boot app launched on the host and Mac database clients
-  use `localhost:5433` by default. The ignored `.env` supplies datasource and provider/notification
+- The service shares the `folio_pro` PostgreSQL database with investment-management-svc; both services'
+  tables live in its `public` schema (folio-pro's via Flyway, this service's via Hibernate), so table
+  names must stay unique across the two. For local
+  development, `compose.yaml` runs only the Spring Boot container, which connects to the Mac-hosted
+  database at `host.docker.internal:5432/folio_pro`; a Spring Boot app launched on the host and Mac
+  database clients use `localhost:5432/folio_pro`. The ignored `.env` supplies datasource and provider/notification
   configuration to Compose; host-run Maven/IDE processes can load credentials from the ignored
   root-level `application-secrets.yml`, imported by `application.yml`. Run the IDE from the repository
   root and restart after changing secrets. Keep this local file as the persistent source for developer
@@ -55,7 +57,7 @@ application-wide conventions, affects deployment topology, or introduces a new s
   `FmpProfileController` under `/api/fmp`) and stock-management routes separate from provider-fetch
   workflows (for example, `StockSymbolController` under `/api/stock-symbols`).
 - FMP profile writes upsert by ticker symbol, then read persisted profiles for the response; the
-  saved-profile GET also returns full profiles without issuing provider requests.
+  GET and POST both return full profiles, calling FMP only for symbols not updated today.
 - Do not introduce another datasource, production H2 mirroring, migration framework, security
   mechanism, or new architecture pattern without confirming compatibility and the intended trade-off.
 - Keep local Compose PostgreSQL isolated in its named volume and bound to host loopback; do not

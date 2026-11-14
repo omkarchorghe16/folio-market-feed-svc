@@ -23,8 +23,10 @@ applyTo: "**/*.java"
 - PostgreSQL is the application datasource. H2 is configured for tests only; do not introduce a
   production H2 mirror or treat test H2 data as authoritative without an explicit architecture
   decision.
-- Local development uses the PostgreSQL service in `compose.yaml`; the application connects to
-  `postgres:5432` inside Compose and `localhost:5433` when run from the host. The workflow in
+- The datasource is the shared `folio_pro` database (shared with investment-management-svc); all
+  tables of both services live in the `public` schema, so keep table names unique across them. The application connects to `localhost:5432/folio_pro` when run from the host and
+  `host.docker.internal:5432/folio_pro` from the Compose app container; Compose does not run
+  PostgreSQL. Keep this service's tables out of folio-pro's `public` schema. The workflow in
   `.github/workflows/ci-cd.yml` packages/tests the application and builds a Docker image, but does
   not publish it or deploy because Docker Desktop Kubernetes is local-only. The local deploy script
   applies the image and smoke-tests readiness.

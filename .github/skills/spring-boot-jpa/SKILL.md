@@ -12,10 +12,12 @@ Use this skill when changing persisted data, repository queries, or transactiona
 - PostgreSQL is the application datasource configured in `src/main/resources/application.yml`.
   H2 is configured for tests in `src/test/resources/application.yml`; there is no production H2
   mirror in the current architecture.
-- Local development uses the official PostgreSQL Docker image via `compose.yaml`, with persistent
-  data in the `postgres_data` named volume; app containers connect to `postgres:5432`, while a
-  host-run Spring Boot app and Mac database clients connect to `localhost:5433` by default. The
-  ignored `.env` configures Compose. Host-run Maven/IDE processes can load datasource credentials
+- The database is the shared `folio_pro` PostgreSQL (also used by investment-management-svc) on the
+  Mac at `localhost:5432`, role `folio_pro`. This service's tables share the `public` schema with
+  folio-pro's Flyway-managed tables. Keep new entity table names distinct from folio-pro's
+  (`portfolios`, `holdings`, `watchlists_*`, `watchlist_items_*`, `user_preferences`), never alter or
+  map folio-pro's tables, and never suggest `flyway clean` on this database. Compose runs only the app container, which connects via
+  `host.docker.internal:5432/folio_pro`. The ignored `.env` configures Compose. Host-run Maven/IDE processes can load datasource credentials
   from the ignored root-level `application-secrets.yml`; run from the repository root and restart
   after editing it. Preserve this developer-owned file and its values during routine work; do not
   move credentials into the tracked `src/main/resources/application-local.yml`.
@@ -24,9 +26,11 @@ Use this skill when changing persisted data, repository queries, or transactiona
   `com.stocknews.repository`; use-case transactions belong in service classes.
 - Preserve existing entity/table/column naming and typed models. Keep provider-specific records
   separate when their schemas or units differ.
-- FMP profiles are upserted by their unique symbol, retaining an existing entity ID on refresh. The
-  POST reads matching records after persistence before returning, while the saved-profile GET reads
-  matching records without calling the provider.
+- FMP profiles are upserted by their unique symbol, retaining an existing entity ID and
+  `created_date` on refresh; `updated_date` changes on every refresh. GET and POST both serve rows
+  updated today from PostgreSQL and refresh stale or missing symbols from FMP, saving each one as soon
+  as it is fetched. Hibernate `update` cannot add a `NOT NULL` column to a non-empty table, so add such
+  columns with a manual backfill migration first.
 - Keep HTTP concerns out of entities and repository interfaces.
 - Use `@Transactional(readOnly = true)` for read workflows and `@Transactional` for mutations or
   multi-step workflows that need one database transaction.

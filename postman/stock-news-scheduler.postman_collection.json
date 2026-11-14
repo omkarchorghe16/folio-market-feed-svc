@@ -661,7 +661,7 @@
           "response": []
         },
         {
-          "name": "Get Saved FMP Stock Profiles",
+          "name": "Get FMP Stock Profiles (DB if updated today, else FMP)",
           "event": [
             {
               "listen": "test",
@@ -669,7 +669,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Status code is 200\", function () {\n  pm.response.to.have.status(200);\n});\n",
-                  "pm.test(\"Returns full saved stock profiles\", function () {\n  var profiles = pm.response.json();\n  pm.expect(profiles).to.be.an(\"array\");\n  profiles.forEach(function (profile) {\n    pm.expect(profile).to.have.property(\"symbol\");\n    pm.expect(profile).to.have.property(\"companyName\");\n    pm.expect(profile).to.have.property(\"country\");\n    pm.expect(profile).to.have.property(\"updatedAt\");\n  });\n});\n"
+                  "pm.test(\"Returns full saved stock profiles\", function () {\n  var profiles = pm.response.json();\n  pm.expect(profiles).to.be.an(\"array\");\n  profiles.forEach(function (profile) {\n    pm.expect(profile).to.have.property(\"symbol\");\n    pm.expect(profile).to.have.property(\"companyName\");\n    pm.expect(profile).to.have.property(\"country\");\n    pm.expect(profile).to.have.property(\"createdDate\");\n    pm.expect(profile).to.have.property(\"updatedDate\");\n  });\n});\n"
                 ]
               }
             }

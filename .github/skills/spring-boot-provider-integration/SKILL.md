@@ -29,9 +29,11 @@ or another remote service.
 - Map provider responses into typed models. Keep error/status translation close to the provider
   client and propagate failures rather than returning empty success-shaped data.
 - Keep provider-specific HTTP APIs in dedicated controllers when separating them improves API
-  clarity. `POST /api/fmp/profiles` accepts a `symbols` list, upserts fetched/cached profile data by
-  ticker symbol, then reads and returns the persisted full profiles. `GET /api/fmp/profiles?symbols=AAPL,MSFT`
-  reads full saved profiles without making provider requests.
+  clarity. `GET /api/fmp/profiles?symbols=...` and `POST /api/fmp/profiles` share
+  `FmpProfileService.getProfiles`: a saved row whose `updated_date` is today (in
+  `fmp.profile-refresh-time-zone`) is served from PostgreSQL; any other symbol is fetched from FMP for
+  that symbol only and upserted immediately, keeping `id` and `created_date`. Key, US-exchange, and
+  quota checks run only when a fetch is needed.
 - Logs must not contain credentials, authorization headers, full credential-bearing URLs, raw
   provider responses, business-summary text, or unsanitized exception details that can reveal them.
 

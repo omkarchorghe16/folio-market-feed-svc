@@ -121,30 +121,44 @@ make unrelated skill edits just to create churn.
 ### Keeping API keys and credentials out of Git
 
 `application.yml` reads secrets from environment variables (for example, `FINNHUB_API_KEY`). The
-repository `.env` starts with blank secret values; fill in local development values before starting
-the PostgreSQL service:
+repository `.env` starts with blank secret values; fill in local development values before running.
+
+#### Shared `folio_pro` database
+
+This service shares one PostgreSQL database, `folio_pro`, with
+[investment-management-svc](https://github.com/omkarchorghe16/invesment-management-svc) (folio-pro).
+Both applications keep their tables together in the `public` schema:
+
+| Tables | Owner application | Managed by |
+| --- | --- | --- |
+| `portfolios`, `holdings`, `watchlists_*`, `watchlist_items_*`, `user_preferences`, `flyway_schema_history` | investment-management-svc | Flyway migrations (`ddl-auto: validate`) |
+| `sectors`, `stocks`, `sent_articles`, `fmp_*`, `finnhub_*`, `yahoo_*`, `alpha_vantage_*` | this service | Hibernate `ddl-auto: update` |
+
+Because the schema is shared:
+
+- Keep table names unique across both services. A folio-pro migration that creates a table with one of
+  this service's names (or the reverse) will fail or collide.
+- Never run `flyway clean` against `folio_pro`; it drops every object in `public`, including this
+  service's tables and data.
+- Hibernate `update` only adds tables/columns for this service's entities and never drops folio-pro's
+  tables, while folio-pro's `validate` ignores tables it does not map.
+
+Connect as the `folio_pro` role, which owns the database; do not use a superuser for the application.
+
+The database runs on the Mac (Homebrew PostgreSQL on `localhost:5432`). To run Spring Boot from a
+terminal, start Maven; the defaults already point at the shared database:
 
 ```bash
-docker compose up -d postgres
-```
-
-To run Spring Boot from a terminal on your Mac, set the datasource environment variables for that
-shell and start Maven:
-
-```bash
-export POSTGRES_URL="jdbc:postgresql://localhost:5433/news_scheduler"
-export POSTGRES_USER="news_scheduler"
-export POSTGRES_PASSWORD="your-local-postgres-password"
+# Defaults: POSTGRES_URL=jdbc:postgresql://localhost:5432/folio_pro, POSTGRES_USER=folio_pro
+export POSTGRES_PASSWORD="your-local-postgres-password"   # leave unset if local auth is trust
 mvn spring-boot:run
 ```
 
-The host-run app defaults to `jdbc:postgresql://localhost:5433/news_scheduler` with user
-`news_scheduler`; the password comes from `POSTGRES_PASSWORD`. For an IDE run configuration, set
-`POSTGRES_URL`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` from `.env` under **Environment variables**.
-Compose itself reads `.env` automatically, but Maven and IDE run configurations do not. Use the same
-local-only password in `.env` and the host app's environment. If you change `POSTGRES_HOST_PORT` in
-`.env`, set `POSTGRES_URL` to that same host port. Do not commit `.env` or IDE run configuration
-files containing credentials, or paste secrets into Postman exports.
+For an IDE run configuration, set `POSTGRES_URL`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` under
+**Environment variables** if they differ from the defaults. Compose reads `.env` automatically, but
+Maven and IDE run configurations do not. An ignored `application-secrets.yml` overrides these values,
+so keep its `spring.datasource` entries pointing at `folio_pro` too. Do not commit `.env` or IDE run
+configuration files containing credentials, or paste secrets into Postman exports.
 
 An optional local YAML override is also supported: copy
 `src/main/resources/application-local.yml` to the repository root as
@@ -185,12 +199,15 @@ require live provider keys.
 Credentials pasted into chat or other shared systems should be treated as exposed. Revoke/regenerate
 credentials immediately if they are accidentally exposed.
 
-### Run Spring Boot and PostgreSQL in Docker for development
+### Run Spring Boot in Docker for development
 
 Compose automatically reads `.env` from the repository root. The repository file contains blank
-secret values; populate it with development-only credentials for local use.
+secret values; populate it with development-only credentials for local use. Compose runs only the
+application container; it does not start its own PostgreSQL. The container connects to the shared
+`folio_pro` database on the Mac through `host.docker.internal:${POSTGRES_HOST_PORT}` (default
+`5432`), so that PostgreSQL server must be running and accept connections from Docker Desktop.
 
-Then set a development-only `POSTGRES_PASSWORD` in `.env`, as well as the
+Set `POSTGRES_PASSWORD` in `.env` if your server requires one, as well as the
 `FMP_API_KEY`, `FINNHUB_API_KEY`, `NEWSAPI_KEY`, `ALPHA_VANTAGE_API_KEY`, and notification
 credentials you use. Do not commit real credentials in `.env`.
 Compose passes these environment variables to Spring Boot, where `application.yml` already maps them
@@ -200,31 +217,24 @@ blank starter file can be tracked; take care not to commit it after adding crede
 includes provider URLs/limits, WhatsApp enablement, provider timeout/retries, and
 digest schedule/timezone settings. Leave defaults unchanged unless you want to override them.
 
-Start both services from the repository root:
+Start the service from the repository root:
 
 ```bash
 docker compose up --build -d
 ```
 
-The app waits for PostgreSQL to become healthy. Inside Docker, the app connects to host `postgres`,
-port `5432`. On your Mac, connect using `localhost`, port `5433`, database `news_scheduler`, user
-`news_scheduler`, and the password from `.env`. The database port is bound to the Mac loopback only.
-For example, enter those values in DBeaver, pgAdmin, or IntelliJ's Database tool. If you have the
-PostgreSQL command-line client installed, connect with:
+On your Mac, browse the data with DBeaver, pgAdmin, or IntelliJ's Database tool using `localhost`,
+port `5432`, database `folio_pro`, user `folio_pro`, and schema `public`. With the PostgreSQL
+command-line client:
 
 ```bash
-psql -h localhost -p 5433 -U news_scheduler -d news_scheduler
+psql -h localhost -p 5432 -U folio_pro -d folio_pro -c '\dt'
 ```
 
-The database data persists in the Docker named volume `postgres_data`, including after
-`docker compose down`. To delete this dev database permanently, use `docker compose down --volumes`;
-that removes the volume and all data in it. View logs with `docker compose logs -f news-scheduler`,
-stop containers with `docker compose down`, or restart with `docker compose up -d`. The host port can
-be changed by setting `POSTGRES_HOST_PORT` in `.env`.
-
-This Compose database is separate from any PostgreSQL already installed on the Mac. It is also
-separate from the Kubernetes configuration below, which still targets PostgreSQL on the Mac at
-`host.docker.internal:5432`.
+View logs with `docker compose logs -f news-scheduler`, stop with `docker compose down`, or restart
+with `docker compose up -d`. `docker compose down` never touches database data, because the database
+lives outside Compose. The Kubernetes configuration below targets the same database at
+`host.docker.internal:5432/folio_pro`.
 
 ### CI image build and Kubernetes deployment
 
@@ -240,7 +250,7 @@ repository secrets before enabling deployment:
 
 The deployed image must be pullable by the cluster. Make the GHCR package public or configure an
 image pull secret on the `dev` namespace. The existing manifests target the `dev` namespace, use
-`host.docker.internal:5432/postgres` for PostgreSQL, and use an example ingress host; update these
+`host.docker.internal:5432/folio_pro` for PostgreSQL, and use an example ingress host; update these
 for the cluster and database before deploying remotely. Keep the deployment at one replica because
 each instance runs the scheduled digest job.
 
@@ -272,7 +282,7 @@ scheduled digest job; increasing replicas can send duplicate digests.
    Secret `news-scheduler-secrets`, mounted read-only at `/app/application-secrets.yml`. Spring
    already imports that path from `application.yml`, so no secret values are baked into the image or
    passed on the command line. The Deployment sets `SPRING_DATASOURCE_URL` to
-   `jdbc:postgresql://host.docker.internal:5432/postgres`; change that value in
+   `jdbc:postgresql://host.docker.internal:5432/folio_pro` (the shared database); change that value in
    `k8s/deployment.yaml` if your database name or port differs.
 
    Put credentials under the same Spring property hierarchy used by the application, for example:
@@ -371,20 +381,15 @@ mvn clean install
 
 ### 4. Run Locally
 
-**Run the application from Maven/IDE with PostgreSQL in Docker**
+**Run the application from Maven/IDE against the shared `folio_pro` database**
 ```bash
-docker compose up -d postgres
-export POSTGRES_URL="jdbc:postgresql://localhost:5433/news_scheduler"
-export POSTGRES_USER="news_scheduler"
-export POSTGRES_PASSWORD="your-local-postgres-password"
 mvn spring-boot:run
 ```
 
-The default Spring profile is `local`. Before starting Maven, set `POSTGRES_URL` to
-`jdbc:postgresql://localhost:5433/news_scheduler`, `POSTGRES_USER` to `news_scheduler`, and
-`POSTGRES_PASSWORD` to the local password configured in `.env`. For an IDE run, configure those
-three environment variables in its run configuration. `.env` is read by Docker Compose, not
-automatically by Maven or IDEs.
+The default Spring profile is `local`. The datasource defaults to
+`jdbc:postgresql://localhost:5432/folio_pro` with user `folio_pro` (tables in `public`); set
+`POSTGRES_URL`, `POSTGRES_USER`, or `POSTGRES_PASSWORD` only to override them.
+`.env` is read by Docker Compose, not automatically by Maven or IDEs.
 The application listens on `http://localhost:8082` by default; override this with `SERVER_PORT` if
 needed. Docker Compose also exposes it at `http://localhost:8082`.
 
@@ -447,19 +452,26 @@ in provider-specific PostgreSQL tables.
 FMP profiles use `FMP_API_KEY` and the `https://financialmodelingprep.com/stable` base URL by
 default. You can override it with `FMP_BASE_URL`. The service enforces the configurable
 `FMP_DAILY_REQUEST_LIMIT` (default 250 calls in a rolling 24-hour window), tracked in PostgreSQL.
-Profiles are reused from PostgreSQL for `FMP_PROFILE_CACHE_HOURS` (default 24); set it to `0` to
-fetch fresh data on every POST request. POST upserts fetched profiles by ticker symbol, preserving
-the existing database row rather than inserting a duplicate.
+Every `fmp_stock_profiles` row has `created_date` (set once, when the symbol is first saved) and
+`updated_date` (set on every FMP refresh). Both `GET` and `POST /api/fmp/profiles` apply the same
+per-symbol rule:
+
+- `updated_date` is **today** → the saved row is returned from PostgreSQL; no FMP call, no quota used.
+- Not updated today, or not saved yet → FMP is called **for that symbol only**, the row is upserted by
+  ticker symbol (keeping its `id` and `created_date`), and the fresh record is returned.
+
+"Today" is evaluated in `FMP_PROFILE_REFRESH_TIME_ZONE` (default `America/Chicago`), so host and
+container runs agree on the date. Each refreshed symbol is saved as soon as it is fetched, so if a later
+symbol fails, earlier ones are kept. The API key, US-exchange, and quota checks apply only when at least
+one symbol needs an FMP call.
 FMP Basic/free accounts are US-exchange-only; requests containing `.NS` or `.BO` are rejected by
 default. Set `FMP_US_EXCHANGES_ONLY=false` only when your FMP plan supports those symbols.
 Every FMP profile record includes the complete raw provider record in `raw_payload`.
 
-To fetch full saved profile records without calling FMP, use
-`GET /api/fmp/profiles?symbols=AAPL,MSFT`. The `symbols` query parameter also accepts repeated
-values (`?symbols=AAPL&symbols=MSFT`). The response includes only matching saved profiles, in request
-order; symbols not found in PostgreSQL are omitted. `POST /api/fmp/profiles` first fetches and
-upserts the requested symbols, then reads the matching saved records from PostgreSQL and returns those
-full records to the caller.
+`GET /api/fmp/profiles?symbols=AAPL,MSFT` takes symbols as a query parameter (comma-separated or
+repeated, `?symbols=AAPL&symbols=MSFT`); `POST /api/fmp/profiles` takes `{"symbols": [...]}`. Both return
+one full profile per symbol in request order. Because a stale symbol is refreshed from FMP, `GET` can
+call FMP and write to PostgreSQL, and a symbol FMP does not know returns `404`.
 
 ```json
 [
@@ -475,14 +487,15 @@ full records to the caller.
     "sector": "Technology",
     "country": "US",
     "description": "Company description...",
-    "updatedAt": "2026-11-08T20:00:00"
+    "createdDate": "2026-09-29T23:34:18",
+    "updatedDate": "2026-11-14T16:30:26"
   }
 ]
 ```
 
 The response contains the persisted FMP profile fields; provider fields may be null, and
 `rawPayload` contains the provider record. The Postman collection includes both the FMP upsert request
-and saved-profile lookup request.
+and the GET lookup request.
 Finnhub requests are spaced to stay within the provider's 60-calls-per-minute limit for this endpoint.
 Yahoo Finance is an unofficial API and may rate-limit requests or change its response format.
 Alpha Vantage requests are limited to 25 per day and 5 per minute. The daily count is persisted in
@@ -696,23 +709,20 @@ The application reads and writes data through Spring Data JPA repositories in
 `model`, using the PostgreSQL datasource. Hibernate creates or updates
 the PostgreSQL tables from the JPA entities at startup. H2 is used only for automated tests.
 
-Create a PostgreSQL database and user using pgAdmin or `psql`, for example:
+The `folio_pro` database and `folio_pro` role are created by investment-management-svc's setup; this
+service needs no database of its own. If you are setting up from scratch:
 
 ```sql
-CREATE USER news_scheduler WITH PASSWORD 'set-a-local-password';
-CREATE DATABASE news_scheduler OWNER news_scheduler;
+CREATE USER folio_pro WITH PASSWORD 'set-a-local-password';
+CREATE DATABASE folio_pro OWNER folio_pro;
 ```
 
-For the Compose database, the host-run app defaults to
-`POSTGRES_URL=jdbc:postgresql://localhost:5433/news_scheduler` and `POSTGRES_USER=news_scheduler`;
-set `POSTGRES_PASSWORD` to the local password configured for the container. For a manually installed
-PostgreSQL server on port 5432, override `POSTGRES_URL` to
-`jdbc:postgresql://localhost:5432/news_scheduler`. The application writes to the database in the
-effective `POSTGRES_URL` (including overrides in `application-secrets.yml`); inspect that exact
-database in pgAdmin or IntelliJ. Do not put credentials into committed configuration. Hibernate
-updates PostgreSQL tables on startup.
+The application writes to the database in the effective `POSTGRES_URL`
+(including overrides in `application-secrets.yml`); inspect that exact database in pgAdmin or
+IntelliJ. Do not put credentials into committed configuration.
 
-Hibernate creates or updates these PostgreSQL tables from the corresponding JPA entities:
+Hibernate creates or updates these tables in the shared `public` schema from the corresponding JPA
+entities:
 
 | Table | Contents |
 | --- | --- |
@@ -727,14 +737,14 @@ Hibernate creates or updates these PostgreSQL tables from the corresponding JPA 
 ### Browse PostgreSQL data in IntelliJ IDEA or pgAdmin
 
 Add a PostgreSQL data source matching the effective `POSTGRES_URL`, username, and password from the
-running application. Refresh its `public` schema, then open the profile
-tables or use the SQL console:
+running application. Refresh its `public` schema (shared with folio-pro's tables), then open the
+profile tables or use the SQL console:
 
 ```sql
 SELECT * FROM finnhub_stock_profiles ORDER BY updated_at DESC;
 SELECT * FROM yahoo_stock_profiles ORDER BY updated_at DESC;
 SELECT * FROM alpha_vantage_overviews ORDER BY updated_at DESC;
-SELECT * FROM fmp_stock_profiles ORDER BY updated_at DESC;
+SELECT * FROM fmp_stock_profiles ORDER BY updated_date DESC;
 SELECT called_at FROM fmp_api_calls ORDER BY called_at DESC;
 SELECT * FROM sent_articles ORDER BY sent_at DESC;
 ```

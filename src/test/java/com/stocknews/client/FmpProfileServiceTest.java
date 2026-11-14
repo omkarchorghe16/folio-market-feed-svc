@@ -13,18 +13,28 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class FmpProfileServiceTest {
+    private static final ZoneId ZONE = ZoneId.of("America/Chicago");
+    /** 2026-11-14 10:00 in Chicago. */
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-14T16:00:00Z"), ZONE);
+    private static final LocalDateTime NOW = LocalDateTime.now(CLOCK);
+
     @Mock
     private FmpProfileClient client;
 
@@ -34,104 +44,142 @@ class FmpProfileServiceTest {
     @Mock
     private FmpApiCallRepository apiCallRepository;
 
+    private FmpProperties properties;
     private FmpProfileService service;
 
     @BeforeEach
     void setUp() {
-        FmpProperties properties = new FmpProperties();
+        properties = new FmpProperties();
         properties.setApiKey("test-api-key");
-        service = new FmpProfileService(client, profileRepository, apiCallRepository, properties);
+        service = new FmpProfileService(client, profileRepository, apiCallRepository, properties, CLOCK);
     }
 
     @Test
-    void fetchesAndPersistsUniqueSymbolsAndTracksQuota() {
-        FmpStockProfile profile = new FmpStockProfile();
-        profile.setSymbol("AAPL");
-        when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(0L);
+    void fetchesNewSymbolOnceSetsBothDatesAndTracksQuota() {
+        FmpStockProfile fetched = profile("AAPL", null);
         when(profileRepository.findAllBySymbolIn(List.of("AAPL"))).thenReturn(List.of());
-        when(client.fetchProfile("AAPL")).thenReturn(profile);
-        when(profileRepository.saveAllAndFlush(any())).thenReturn(List.of(profile));
+        when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(0L);
+        when(client.fetchProfile("AAPL")).thenReturn(fetched);
+        when(profileRepository.saveAndFlush(fetched)).thenReturn(fetched);
 
-        List<FmpStockProfile> saved = service.fetchAndSave(List.of(" aapl ", "AAPL"));
+        List<FmpStockProfile> result = service.getProfiles(List.of(" aapl ", "AAPL"));
 
-        assertEquals(List.of(profile), saved);
-        verify(apiCallRepository).saveAndFlush(any(FmpApiCall.class));
-        verify(profileRepository).saveAllAndFlush(any());
+        assertEquals(List.of(fetched), result);
+        assertEquals(NOW, fetched.getCreatedDate());
+        assertEquals(NOW, fetched.getUpdatedDate());
+        verify(apiCallRepository, times(1)).saveAndFlush(any(FmpApiCall.class));
+        verify(client, times(1)).fetchProfile("AAPL");
+    }
+
+    @Test
+    void servesProfileUpdatedTodayFromDatabaseWithoutCallingFmp() {
+        FmpStockProfile saved = profile("AAPL", NOW.toLocalDate().atStartOfDay().plusMinutes(1));
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL"))).thenReturn(List.of(saved));
+
+        List<FmpStockProfile> result = service.getProfiles(List.of("AAPL"));
+
+        assertEquals(List.of(saved), result);
+        verify(client, never()).fetchProfile(any());
+        verify(apiCallRepository, never()).countByCalledAtAfter(any());
+        verify(profileRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void servesTodayProfileEvenWhenApiKeyIsMissing() {
+        properties.setApiKey("");
+        FmpStockProfile saved = profile("AAPL", NOW.minusHours(2));
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL"))).thenReturn(List.of(saved));
+
+        assertEquals(List.of(saved), service.getProfiles(List.of("AAPL")));
+    }
+
+    @Test
+    void refreshesProfileUpdatedYesterdayEvenIfLessThan24HoursAgo() {
+        FmpStockProfile saved = profile("AAPL", NOW.toLocalDate().atStartOfDay().minusMinutes(1));
+        saved.setId(42L);
+        LocalDateTime originalCreated = LocalDateTime.of(2026, 1, 5, 9, 30);
+        saved.setCreatedDate(originalCreated);
+        FmpStockProfile fetched = profile("AAPL", null);
+        fetched.setCompanyName("Updated Name");
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL"))).thenReturn(List.of(saved));
+        when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(0L);
+        when(client.fetchProfile("AAPL")).thenReturn(fetched);
+        when(profileRepository.saveAndFlush(fetched)).thenReturn(fetched);
+
+        FmpStockProfile result = service.getProfiles(List.of("AAPL")).getFirst();
+
+        assertEquals(42L, result.getId());
+        assertEquals("Updated Name", result.getCompanyName());
+        assertEquals(originalCreated, result.getCreatedDate());
+        assertEquals(NOW, result.getUpdatedDate());
+    }
+
+    @Test
+    void callsFmpOnlyForStaleSymbolsAndKeepsRequestOrder() {
+        FmpStockProfile msftToday = profile("MSFT", NOW.minusHours(1));
+        FmpStockProfile aaplOld = profile("AAPL", NOW.minusDays(3));
+        FmpStockProfile aaplFresh = profile("AAPL", null);
+        FmpStockProfile nvdaNew = profile("NVDA", null);
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL", "MSFT", "NVDA")))
+                .thenReturn(List.of(msftToday, aaplOld));
+        when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(0L);
+        when(client.fetchProfile("AAPL")).thenReturn(aaplFresh);
+        when(client.fetchProfile("NVDA")).thenReturn(nvdaNew);
+        when(profileRepository.saveAndFlush(any(FmpStockProfile.class))).thenAnswer(call -> call.getArgument(0));
+
+        List<FmpStockProfile> result = service.getProfiles(List.of("AAPL", "MSFT", "NVDA"));
+
+        assertSame(aaplFresh, result.get(0));
+        assertSame(msftToday, result.get(1));
+        assertSame(nvdaNew, result.get(2));
+        verify(client, never()).fetchProfile("MSFT");
+        verify(apiCallRepository, times(2)).saveAndFlush(any(FmpApiCall.class));
+    }
+
+    @Test
+    void keepsEarlierFetchedProfilesWhenALaterSymbolFails() {
+        FmpStockProfile aapl = profile("AAPL", null);
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL", "BAD"))).thenReturn(List.of());
+        when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(0L);
+        when(client.fetchProfile("AAPL")).thenReturn(aapl);
+        when(client.fetchProfile("BAD")).thenThrow(new ResponseStatusException(
+                org.springframework.http.HttpStatus.NOT_FOUND, "FMP returned no profile for BAD"));
+        when(profileRepository.saveAndFlush(aapl)).thenReturn(aapl);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.getProfiles(List.of("AAPL", "BAD")));
+
+        assertEquals(404, exception.getStatusCode().value());
+        verify(profileRepository).saveAndFlush(aapl);
     }
 
     @Test
     void rejectsRequestsThatWouldExceedTheConfiguredDailyQuota() {
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL", "MSFT"))).thenReturn(List.of());
         when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(249L);
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                () -> service.fetchAndSave(List.of("AAPL", "MSFT")));
+                () -> service.getProfiles(List.of("AAPL", "MSFT")));
 
         assertEquals(429, exception.getStatusCode().value());
         verify(client, never()).fetchProfile(any());
     }
 
     @Test
-    void rejectsIndianSymbolsOnTheBasicPlan() {
+    void rejectsIndianSymbolsThatNeedFetchingOnTheBasicPlan() {
+        when(profileRepository.findAllBySymbolIn(List.of("RELIANCE.NS"))).thenReturn(List.of());
+
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                () -> service.fetchAndSave(List.of("RELIANCE.NS")));
+                () -> service.getProfiles(List.of("RELIANCE.NS")));
 
         assertEquals(400, exception.getStatusCode().value());
         verify(apiCallRepository, never()).countByCalledAtAfter(any());
     }
 
-    @Test
-    void returnsRecentPostgresProfileWithoutCallingFmpOrSpendingQuota() {
-        FmpStockProfile cachedProfile = new FmpStockProfile();
-        cachedProfile.setSymbol("AAPL");
-        cachedProfile.setUpdatedAt(LocalDateTime.now().minusHours(1));
-        when(profileRepository.findAllBySymbolIn(List.of("AAPL"))).thenReturn(List.of(cachedProfile));
-
-        List<FmpStockProfile> profiles = service.fetchAndSave(List.of("AAPL"));
-
-        assertEquals(List.of(cachedProfile), profiles);
-        verify(client, never()).fetchProfile(any());
-        verify(apiCallRepository, never()).countByCalledAtAfter(any());
-        verify(profileRepository, never()).saveAllAndFlush(any());
-    }
-
-    @Test
-    void updatesAnExpiredSavedProfileInsteadOfCreatingAnotherRow() {
-        FmpStockProfile savedProfile = new FmpStockProfile();
-        savedProfile.setId(42L);
-        savedProfile.setSymbol("AAPL");
-        savedProfile.setCompanyName("Old Name");
-        savedProfile.setUpdatedAt(LocalDateTime.now().minusHours(25));
-
-        FmpStockProfile refreshedProfile = new FmpStockProfile();
-        refreshedProfile.setSymbol("AAPL");
-        refreshedProfile.setCompanyName("Updated Name");
-        when(profileRepository.findAllBySymbolIn(List.of("AAPL"))).thenReturn(List.of(savedProfile));
-        when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(0L);
-        when(client.fetchProfile("AAPL")).thenReturn(refreshedProfile);
-        when(profileRepository.saveAllAndFlush(any())).thenReturn(List.of(refreshedProfile));
-
-        List<FmpStockProfile> result = service.fetchAndSave(List.of("AAPL"));
-
-        assertEquals(42L, refreshedProfile.getId());
-        assertEquals("Updated Name", result.getFirst().getCompanyName());
-        verify(profileRepository).saveAllAndFlush(List.of(refreshedProfile));
-    }
-
-    @Test
-    void returnsFullSavedProfilesInRequestOrderWithoutCallingFmp() {
-        FmpStockProfile msft = new FmpStockProfile();
-        msft.setSymbol("MSFT");
-        msft.setCountry("US");
-        FmpStockProfile aapl = new FmpStockProfile();
-        aapl.setSymbol("AAPL");
-        aapl.setCountry("US");
-        when(profileRepository.findAllBySymbolIn(List.of("MSFT", "MISSING", "AAPL")))
-                .thenReturn(List.of(aapl, msft));
-
-        List<FmpStockProfile> result =
-                service.findSavedProfiles(List.of(" msft ", "MISSING", "AAPL", "MSFT"));
-
-        assertEquals(List.of(msft, aapl), result);
-        verify(client, never()).fetchProfile(any());
+    private static FmpStockProfile profile(String symbol, LocalDateTime updatedDate) {
+        FmpStockProfile profile = new FmpStockProfile();
+        profile.setSymbol(symbol);
+        profile.setUpdatedDate(updatedDate);
+        return profile;
     }
 }

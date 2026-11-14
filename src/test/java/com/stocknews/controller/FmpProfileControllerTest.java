@@ -9,9 +9,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -34,7 +34,9 @@ class FmpProfileControllerTest {
         profile.setSymbol("AAPL");
         profile.setCompanyName("Apple Inc.");
         profile.setCountry("US");
-        when(fmpProfileService.findSavedProfiles(List.of("AAPL"))).thenReturn(List.of(profile));
+        profile.setCreatedDate(LocalDateTime.of(2026, 11, 1, 9, 0));
+        profile.setUpdatedDate(LocalDateTime.of(2026, 11, 14, 10, 0));
+        when(fmpProfileService.getProfiles(List.of("AAPL"))).thenReturn(List.of(profile));
 
         mockMvc.perform(post("/api/fmp/profiles")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -42,11 +44,11 @@ class FmpProfileControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].symbol").value("AAPL"))
                 .andExpect(jsonPath("$[0].companyName").value("Apple Inc."))
-                .andExpect(jsonPath("$[0].country").value("US"));
+                .andExpect(jsonPath("$[0].country").value("US"))
+                .andExpect(jsonPath("$[0].createdDate").value("2026-11-01T09:00:00"))
+                .andExpect(jsonPath("$[0].updatedDate").value("2026-11-14T10:00:00"));
 
-        var serviceCalls = inOrder(fmpProfileService);
-        serviceCalls.verify(fmpProfileService).fetchAndSave(List.of("AAPL"));
-        serviceCalls.verify(fmpProfileService).findSavedProfiles(List.of("AAPL"));
+        verify(fmpProfileService).getProfiles(List.of("AAPL"));
     }
 
     @Test
@@ -58,7 +60,7 @@ class FmpProfileControllerTest {
     }
 
     @Test
-    void getSavedProfilesAcceptsCommaSeparatedSymbolsAndReturnsFullProfiles() throws Exception {
+    void getProfilesAcceptsCommaSeparatedSymbolsAndReturnsFullProfiles() throws Exception {
         FmpStockProfile aapl = new FmpStockProfile();
         aapl.setSymbol("AAPL");
         aapl.setCompanyName("Apple Inc.");
@@ -67,7 +69,7 @@ class FmpProfileControllerTest {
         msft.setSymbol("MSFT");
         msft.setCompanyName("Microsoft Corporation");
         msft.setCountry("US");
-        when(fmpProfileService.findSavedProfiles(List.of("AAPL", "MSFT")))
+        when(fmpProfileService.getProfiles(List.of("AAPL", "MSFT")))
                 .thenReturn(List.of(aapl, msft));
 
         mockMvc.perform(get("/api/fmp/profiles").param("symbols", "AAPL,MSFT"))
@@ -77,11 +79,11 @@ class FmpProfileControllerTest {
                 .andExpect(jsonPath("$[0].companyName").value("Apple Inc."))
                 .andExpect(jsonPath("$[1].symbol").value("MSFT"));
 
-        verify(fmpProfileService).findSavedProfiles(List.of("AAPL", "MSFT"));
+        verify(fmpProfileService).getProfiles(List.of("AAPL", "MSFT"));
     }
 
     @Test
-    void getSavedProfilesRequiresSymbols() throws Exception {
+    void getProfilesRequiresSymbols() throws Exception {
         mockMvc.perform(get("/api/fmp/profiles"))
                 .andExpect(status().isBadRequest());
     }

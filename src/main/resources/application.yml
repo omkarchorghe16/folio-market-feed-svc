@@ -8,13 +8,15 @@ spring:
     name: stock-news-scheduler-svc
   datasource:
     # Local secrets-file properties or environment variables override these defaults.
-    url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/postgres}
+    # Shared with investment-management-svc (folio-pro): one folio_pro database, all tables in public.
+    url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/folio_pro}
     driver-class-name: org.postgresql.Driver
-    username: ${POSTGRES_USER:omkarchorghe}
+    username: ${POSTGRES_USER:folio_pro}
     password: ${POSTGRES_PASSWORD:}
   jpa:
     hibernate:
-      # Create/update the PostgreSQL schema from the JPA entities.
+      # Create/update this service's tables from the JPA entities. They share the public schema with
+      # folio-pro's Flyway-managed tables, so keep entity table names distinct from folio-pro's.
       ddl-auto: update
     show-sql: false
     properties:
@@ -33,7 +35,8 @@ fmp:
   api-key: ${FMP_API_KEY:}
   daily-request-limit: ${FMP_DAILY_REQUEST_LIMIT:250}
   us-exchanges-only: ${FMP_US_EXCHANGES_ONLY:true}
-  profile-cache-hours: ${FMP_PROFILE_CACHE_HOURS:24}
+  # A saved profile updated today (in this zone) is served from PostgreSQL; otherwise FMP is called.
+  profile-refresh-time-zone: ${FMP_PROFILE_REFRESH_TIME_ZONE:America/Chicago}
 
 app:
   notifications:

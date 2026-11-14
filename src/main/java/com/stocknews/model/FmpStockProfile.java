@@ -82,12 +82,30 @@ public class FmpStockProfile {
     @Column(columnDefinition = "TEXT")
     private String rawPayload;
 
-    @Column(nullable = false)
-    private LocalDateTime updatedAt;
+    /** When this symbol was first saved; never changed by later refreshes. */
+    @Column(name = "created_date", nullable = false, updatable = false)
+    private LocalDateTime createdDate;
 
+    /** When this row was last refreshed from FMP; a row updated today is served without an FMP call. */
+    @Column(name = "updated_date", nullable = false)
+    private LocalDateTime updatedDate;
+
+    /** Fallbacks only: FmpProfileService sets both timestamps from its configured clock. */
     @PrePersist
+    void fillTimestampsOnCreate() {
+        LocalDateTime now = LocalDateTime.now();
+        if (createdDate == null) {
+            createdDate = now;
+        }
+        if (updatedDate == null) {
+            updatedDate = createdDate;
+        }
+    }
+
     @PreUpdate
-    void updateTimestamp() {
-        updatedAt = LocalDateTime.now();
+    void fillTimestampOnUpdate() {
+        if (updatedDate == null) {
+            updatedDate = LocalDateTime.now();
+        }
     }
 }
