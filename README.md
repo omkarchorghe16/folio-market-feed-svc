@@ -12,6 +12,8 @@ A complete Java Spring Boot application that fetches daily stock market news for
 - **Portfolio Tracking**: Separate digest for configured portfolio symbols (Slack-only)
 - **On-Demand Triggers**: REST endpoints to manually trigger digests without waiting for schedule
 - **Stock Profiles**: Fetch Finnhub, Yahoo Finance, Alpha Vantage, and FMP company information and persist it in PostgreSQL
+- **India Stocks**: Tapetide (NSE/BSE fundamentals, profiles, financials, shareholding, forecasts, history) and Upstox (live quotes, candles) under `/api/india/*`, cached in PostgreSQL to save provider quota
+- **Browser access (CORS)**: `/api/**` accepts calls from the Folio Pro Angular app (`http://localhost:4200` by default)
 - **Sector and Stock Management**: CRUD endpoints for sectors and sector-associated stock tickers, including bulk stock creation
 - **API Documentation**: Interactive Swagger UI and generated OpenAPI specification
 - **Database**: PostgreSQL for application data; H2 is used only by tests
@@ -35,8 +37,11 @@ A complete Java Spring Boot application that fetches daily stock market news for
 com/stocknews/
 ├── StockNewsApplication.java
 ├── config/
-│   ├── AppProperties.java
-│   └── RestClientConfig.java
+│   ├── AppProperties.java          # app.* (notifications, APIs, schedule)
+│   ├── FmpProperties.java / TapetideProperties.java / UpstoxProperties.java
+│   ├── OpenApiConfiguration.java
+│   ├── RestClientConfig.java       # one RestClient per provider
+│   └── WebConfig.java              # CORS for /api/** (cors.allowed-origins)
 ├── scheduler/
 │   └── DigestScheduler.java        # Scheduled cron job
 ├── digest/
@@ -56,9 +61,16 @@ com/stocknews/
 │   └── WhatsAppNotifier.java       # Twilio WhatsApp API
 ├── controller/
 │   ├── DigestTriggerController.java
+│   ├── FmpProfileController.java    # /api/fmp/profiles
+│   ├── IndiaStockController.java    # /api/india/tapetide/*, /api/india/upstox/*
 │   ├── SectorController.java
 │   ├── StockController.java
-│   └── StockProfileController.java # REST endpoints
+│   ├── StockProfileController.java  # Finnhub / Yahoo / Alpha Vantage profiles
+│   └── StockSymbolController.java
+├── india/
+│   ├── IndiaSymbols.java            # NSE symbol normalization
+│   ├── tapetide/                    # Tapetide client + service (PostgreSQL-cached)
+│   └── upstox/                      # Upstox market-data client + service
 ├── dto/                            # Validated requests and API response records
 ├── model/                          # JPA entities and provider-specific records
 ├── repository/                     # Spring Data repositories (PostgreSQL)
@@ -116,12 +128,21 @@ make unrelated skill edits just to create churn.
    - Get Account SID, Auth Token, and WhatsApp numbers
    - Note: Requires message template approval for production use
 
+7. **Tapetide** (optional, for India/NSE fundamentals and profiles)
+   - Create a token: https://tapetide.com/settings/tokens
+   - Set `TAPETIDE_TOKEN` (or `tapetide.token` in `application-secrets.yml`). Free plan: 50 calls/day
+
+8. **Upstox** (optional, for India live quotes and candles)
+   - Create a read-only Analytics Token: https://account.upstox.com/developer/apps (Analytics tab)
+   - Set `UPSTOX_ACCESS_TOKEN` (or `upstox.access-token` in `application-secrets.yml`)
+
 ## Setup & Running Locally
 
 ### Keeping API keys and credentials out of Git
 
 `application.yml` reads secrets from environment variables (for example, `FINNHUB_API_KEY`). The
-repository `.env` starts with blank secret values; fill in local development values before running.
+`.env` file is git-ignored; copy the committed template with `cp .env.example .env` and fill in
+local development values before running.
 
 #### Shared `folio_pro` database
 
@@ -201,8 +222,9 @@ credentials immediately if they are accidentally exposed.
 
 ### Run Spring Boot in Docker for development
 
-Compose automatically reads `.env` from the repository root. The repository file contains blank
-secret values; populate it with development-only credentials for local use. Compose runs only the
+Compose automatically reads `.env` from the repository root. Create it from the template with
+`cp .env.example .env` (the template has blank secret values) and populate it with development-only
+credentials. `.env` is git-ignored. Compose runs only the
 application container; it does not start its own PostgreSQL. The container connects to the shared
 `folio_pro` database on the Mac through `host.docker.internal:${POSTGRES_HOST_PORT}` (default
 `5432`), so that PostgreSQL server must be running and accept connections from Docker Desktop.
@@ -212,8 +234,8 @@ Set `POSTGRES_PASSWORD` in `.env` if your server requires one, as well as the
 credentials you use. Do not commit real credentials in `.env`.
 Compose passes these environment variables to Spring Boot, where `application.yml` already maps them
 to the corresponding settings. Database credentials also come from `.env`. The app container does not need `application-secrets.yml`; that file remains optional for direct
-local Spring Boot runs and the separate Kubernetes setup. `.env` is allowed by `.gitignore` so the
-blank starter file can be tracked; take care not to commit it after adding credentials. It also
+local Spring Boot runs and the separate Kubernetes setup. Only `.env.example` is tracked; keep real
+values in the ignored `.env`. The template also
 includes provider URLs/limits, WhatsApp enablement, provider timeout/retries, and
 digest schedule/timezone settings. Leave defaults unchanged unless you want to override them.
 
@@ -512,6 +534,33 @@ The collection includes requests that create/update/delete database records, tri
 notifications, and call provider APIs. Review the request before sending it because some requests
 have database, notification, or provider side effects.
 
+### India Stocks (Tapetide + Upstox)
+
+All India endpoints are under `/api/india`. Tapetide responses are saved to `tapetide_stock_datasets`
+(and quotes to `tapetide_stock_quotes`) and served from PostgreSQL while they are fresher than
+`tapetide.quote-refresh-minutes` (default 60) or `tapetide.data-refresh-minutes` (default 1440). A
+symbol Tapetide does not know returns **204 No Content** and is logged, not treated as an error.
+Symbols are bare NSE tickers (`RELIANCE`, not `RELIANCE.NS`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/india/tapetide/search?query=&limit=` | Find a symbol by name, symbol, BSE code or ISIN (not saved) |
+| GET | `/api/india/tapetide/quote/{symbol}` | Price, P/E (TTM), P/B, 52-week high/low |
+| GET | `/api/india/tapetide/quotes?symbols=A,B` | Quotes for up to 200 symbols; unknown symbols are skipped |
+| GET | `/api/india/tapetide/profile/{symbol}?include=ratings,peers` | Company overview, fundamentals, growth, pros/cons; `include` adds `technicals`, `ratings`, `peers`. Used by the Folio Pro India watchlist page |
+| GET | `/api/india/tapetide/financials/{symbol}?section=&periods=` | Quarterly/annual P&L, balance sheet, cash flow, ratios |
+| GET | `/api/india/tapetide/shareholding/{symbol}?type=quarterly` | Promoter, FII, DII and public holdings |
+| GET | `/api/india/tapetide/forecasts/{symbol}` | Analyst estimates vs actuals, price target |
+| GET | `/api/india/tapetide/history/{symbol}?days=&interval=daily` | Daily or weekly OHLCV with delivery % |
+| GET | `/api/india/upstox/quotes?symbols=A,B&exchange=NSE` | Live quotes for up to 500 symbols, saved to PostgreSQL |
+| GET | `/api/india/upstox/candles/{symbol}?exchange=NSE&unit=days&interval=1&from=&to=` | Historical candles, saved to PostgreSQL |
+
+```bash
+curl 'http://localhost:8082/api/india/tapetide/profile/RELIANCE?include=ratings,peers'
+```
+
+Postman requests are in the "India Stocks (Tapetide + Upstox)" folder of the collection.
+
 ### Adding Stock Symbols
 
 Add a list of ticker symbols to an existing sector. The service normalizes tickers, creates records
@@ -568,6 +617,14 @@ Stock News Scheduler Service is running
 All configuration is managed through `application.yml` and environment variables. Edit `src/main/resources/application.yml` to override defaults.
 
 ### Key Configuration Properties
+
+CORS for browser clients (the Folio Pro Angular dev server):
+
+```yaml
+cors:
+  # Comma-separated origins allowed to call /api/** (configured in config/WebConfig.java).
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+```
 
 ```yaml
 app:
