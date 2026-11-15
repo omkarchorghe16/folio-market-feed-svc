@@ -1,0 +1,23 @@
+$kind: http-request
+description: Last 8 quarters of P&L. Saved separately from other sections (request_params differ).
+url: "{{url}}/api/india/tapetide/financials/{{indiaSymbol}}?section=quarterly&periods=8"
+method: GET
+queryParams:
+  section: quarterly
+  periods: "8"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("200 with saved data, or 204 if the symbol was skipped (see app logs)", function () {
+        pm.expect(pm.response.code).to.be.oneOf([200, 204]);
+      });
+
+      if (pm.response.code === 200) {
+        pm.test("Saved row has createdDate and updatedDate", function () {
+          var body = pm.response.json();
+          pm.expect(body).to.have.property("createdDate");
+          pm.expect(body).to.have.property("updatedDate");
+        });
+      }
+    language: text/javascript
+order: 6000

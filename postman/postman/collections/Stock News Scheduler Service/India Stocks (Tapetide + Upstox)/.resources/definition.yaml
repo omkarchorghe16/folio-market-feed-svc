@@ -1,0 +1,3 @@
+$kind: collection
+description: "NSE/BSE data saved to PostgreSQL with createdDate/updatedDate. Tapetide = fundamentals (free: 50 calls/day; fresh rows served from the database). Upstox = live quotes and candles. Wrong symbols are logged and skipped, never returned as errors."
+order: 4000

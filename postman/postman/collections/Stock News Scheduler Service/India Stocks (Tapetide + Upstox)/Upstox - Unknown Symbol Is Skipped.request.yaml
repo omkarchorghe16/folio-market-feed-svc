@@ -1,0 +1,19 @@
+$kind: http-request
+description: Unknown symbols are logged with details and left out; the valid ones still return.
+url: "{{url}}/api/india/upstox/quotes?symbols=RELIANCE,NOSUCHXYZ&exchange=NSE"
+method: GET
+queryParams:
+  symbols: RELIANCE,NOSUCHXYZ
+  exchange: NSE
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("Only the valid symbol is returned", function () {
+        pm.expect(pm.response.json().map(function (q) { return q.symbol; })).to.eql(["RELIANCE"]);
+      });
+    language: text/javascript
+order: 12000

@@ -29,6 +29,10 @@ spring:
 server:
   port: ${SERVER_PORT:8082}
 
+cors:
+  # Browser origins allowed to call /api/** (comma-separated). The Angular dev server runs on 4200.
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+
 fmp:
   # Keep the key in application-secrets.yml or set FMP_API_KEY in the environment.
   base-url: ${FMP_BASE_URL:https://financialmodelingprep.com/stable}
@@ -37,6 +41,22 @@ fmp:
   us-exchanges-only: ${FMP_US_EXCHANGES_ONLY:true}
   # A saved profile updated today (in this zone) is served from PostgreSQL; otherwise FMP is called.
   profile-refresh-time-zone: ${FMP_PROFILE_REFRESH_TIME_ZONE:America/Chicago}
+
+tapetide:
+  # NSE/BSE fundamentals. Free plan: 50 calls/day. Token from https://tapetide.com/settings/tokens
+  # Keep the token in application-secrets.yml or set TAPETIDE_TOKEN in the environment.
+  base-url: ${TAPETIDE_BASE_URL:https://mcp.tapetide.com}
+  token: ${TAPETIDE_TOKEN:}
+  # Saved rows younger than these are returned from PostgreSQL without a Tapetide call (saves quota).
+  quote-refresh-minutes: ${TAPETIDE_QUOTE_REFRESH_MINUTES:60}
+  data-refresh-minutes: ${TAPETIDE_DATA_REFRESH_MINUTES:1440}
+  timeout-seconds: ${TAPETIDE_TIMEOUT_SECONDS:30}
+
+upstox:
+  # Live quotes and candles. Use the free read-only Analytics Token (valid ~1 year) from
+  # https://account.upstox.com/developer/apps -> Analytics tab. Keep it in application-secrets.yml.
+  base-url: ${UPSTOX_BASE_URL:https://api.upstox.com}
+  access-token: ${UPSTOX_ACCESS_TOKEN:}
 
 app:
   notifications:

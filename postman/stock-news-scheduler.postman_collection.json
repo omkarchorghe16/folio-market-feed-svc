@@ -9,6 +9,18 @@
       "key": "apiPath",
       "value": "/api/digest",
       "type": "string"
+    },
+    {
+      "key": "indiaSymbol",
+      "value": "RELIANCE"
+    },
+    {
+      "key": "fromDate",
+      "value": ""
+    },
+    {
+      "key": "toDate",
+      "value": ""
     }
   ],
   "item": [
@@ -712,6 +724,452 @@
               }
             },
             "url": "{{url}}/api/stocks/finnhub/profiles"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "India Stocks (Tapetide + Upstox)",
+      "description": "NSE/BSE data saved to PostgreSQL with createdDate/updatedDate. Tapetide = fundamentals (free: 50 calls/day; fresh rows served from the database). Upstox = live quotes and candles. Wrong symbols are logged and skipped, never returned as errors.",
+      "item": [
+        {
+          "name": "Tapetide - Search Symbol (not saved)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/tapetide/search?query=reliance&limit=5",
+            "description": "Find an NSE/BSE symbol by company name, symbol, BSE code or ISIN. Uses 1 Tapetide call (free plan: 50/day). Not saved."
+          },
+          "response": []
+        },
+        {
+          "name": "Tapetide - Get Quote (P/E, P/B, 52W)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 with saved data, or 204 if the symbol was skipped (see app logs)\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test(\"Saved row has createdDate and updatedDate\", function () {",
+                  "    var body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"createdDate\");",
+                  "    pm.expect(body).to.have.property(\"updatedDate\");",
+                  "  });",
+                  "  ",
+                  "  pm.test(\"Quote has price and P/E\", function () {",
+                  "    pm.expect(pm.response.json()).to.have.property(\"price\");",
+                  "    pm.expect(pm.response.json()).to.have.property(\"peTtm\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/tapetide/quote/{{indiaSymbol}}",
+            "description": "Price, P/E (TTM), P/B and 52-week range. Saved to tapetide_stock_quotes. Served from PostgreSQL if refreshed within tapetide.quote-refresh-minutes (60); otherwise 1 Tapetide call. Returns 204 if the symbol is invalid/not found and nothing is saved."
+          },
+          "response": []
+        },
+        {
+          "name": "Tapetide - Get Batch Quotes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Every row is saved with createdDate and updatedDate\", function () {",
+                  "  var rows = pm.response.json();",
+                  "  pm.expect(rows).to.be.an(\"array\");",
+                  "  rows.forEach(function (row) {",
+                  "    pm.expect(row).to.have.property(\"createdDate\");",
+                  "    pm.expect(row).to.have.property(\"updatedDate\");",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/tapetide/quotes?symbols=RELIANCE,TCS,HDFCBANK",
+            "description": "Quotes for many symbols (1 Tapetide call per 20 symbols needing a refresh). Unknown or invalid symbols are logged and left out. Batch quotes have no P/E; the last saved P/E is kept."
+          },
+          "response": []
+        },
+        {
+          "name": "Tapetide - Get Company Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 with saved data, or 204 if the symbol was skipped (see app logs)\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test(\"Saved row has createdDate and updatedDate\", function () {",
+                  "    var body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"createdDate\");",
+                  "    pm.expect(body).to.have.property(\"updatedDate\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/tapetide/profile/{{indiaSymbol}}?include=ratings,peers",
+            "description": "Overview with fundamentals, growth and pros/cons. include: technicals, ratings, peers. Saved to tapetide_stock_datasets (dataset=profile). Served from PostgreSQL if refreshed within tapetide.data-refresh-minutes (1440)."
+          },
+          "response": []
+        },
+        {
+          "name": "Tapetide - Get Financial Ratios",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 with saved data, or 204 if the symbol was skipped (see app logs)\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test(\"Saved row has createdDate and updatedDate\", function () {",
+                  "    var body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"createdDate\");",
+                  "    pm.expect(body).to.have.property(\"updatedDate\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/tapetide/financials/{{indiaSymbol}}?section=ratios&periods=5",
+            "description": "section: quarterly, profit_loss, balance_sheet, cash_flow or ratios (omit for all). periods: 1-40. Saved to tapetide_stock_datasets (dataset=financials)."
+          },
+          "response": []
+        },
+        {
+          "name": "Tapetide - Get Quarterly Results",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 with saved data, or 204 if the symbol was skipped (see app logs)\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test(\"Saved row has createdDate and updatedDate\", function () {",
+                  "    var body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"createdDate\");",
+                  "    pm.expect(body).to.have.property(\"updatedDate\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/tapetide/financials/{{indiaSymbol}}?section=quarterly&periods=8",
+            "description": "Last 8 quarters of P&L. Saved separately from other sections (request_params differ)."
+          },
+          "response": []
+        },
+        {
+          "name": "Tapetide - Get Shareholding",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 with saved data, or 204 if the symbol was skipped (see app logs)\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test(\"Saved row has createdDate and updatedDate\", function () {",
+                  "    var body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"createdDate\");",
+                  "    pm.expect(body).to.have.property(\"updatedDate\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/tapetide/shareholding/{{indiaSymbol}}?type=quarterly",
+            "description": "Promoter, FII, DII and public holdings. type: quarterly or annual (omit for all). Saved to tapetide_stock_datasets (dataset=shareholding)."
+          },
+          "response": []
+        },
+        {
+          "name": "Tapetide - Get Analyst Forecasts (incl. price target)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 with saved data, or 204 if the symbol was skipped (see app logs)\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test(\"Saved row has createdDate and updatedDate\", function () {",
+                  "    var body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"createdDate\");",
+                  "    pm.expect(body).to.have.property(\"updatedDate\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/tapetide/forecasts/{{indiaSymbol}}",
+            "description": "Analyst estimates vs actuals: EPS, revenue, EBITDA, net income, ROA, ROE and price target (payload.data[0].bands.price: estimate/high/low). Saved to tapetide_stock_datasets (dataset=forecasts)."
+          },
+          "response": []
+        },
+        {
+          "name": "Tapetide - Get Price History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200 with saved data, or 204 if the symbol was skipped (see app logs)\", function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  pm.test(\"Saved row has createdDate and updatedDate\", function () {",
+                  "    var body = pm.response.json();",
+                  "    pm.expect(body).to.have.property(\"createdDate\");",
+                  "    pm.expect(body).to.have.property(\"updatedDate\");",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/tapetide/history/{{indiaSymbol}}?days=365&interval=daily",
+            "description": "Daily or weekly OHLCV with delivery %. days up to 2000. Saved to tapetide_stock_datasets (dataset=history)."
+          },
+          "response": []
+        },
+        {
+          "name": "Tapetide - Invalid Symbol Is Logged, Not an Error",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Wrong symbol is skipped with 204, not an error\", function () {",
+                  "  pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/tapetide/quote/NOSUCHXYZ",
+            "description": "A wrong symbol never returns an error: the app logs the details and responds 204 No Content. Note: this still uses 1 Tapetide call."
+          },
+          "response": []
+        },
+        {
+          "name": "Upstox - Get Live Quotes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Every row is saved with createdDate and updatedDate\", function () {",
+                  "  var rows = pm.response.json();",
+                  "  pm.expect(rows).to.be.an(\"array\");",
+                  "  rows.forEach(function (row) {",
+                  "    pm.expect(row).to.have.property(\"createdDate\");",
+                  "    pm.expect(row).to.have.property(\"updatedDate\");",
+                  "  });",
+                  "});",
+                  "",
+                  "pm.test(\"Returns one quote per symbol\", function () {",
+                  "  pm.expect(pm.response.json().map(function (q) { return q.symbol; })).to.eql([\"RELIANCE\", \"TCS\", \"HDFCBANK\"]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/upstox/quotes?symbols=RELIANCE,TCS,HDFCBANK&exchange=NSE",
+            "description": "Live quotes, upserted to upstox_stock_quotes (one row per symbol + exchange). exchange: NSE or BSE. Free; always fetched live."
+          },
+          "response": []
+        },
+        {
+          "name": "Upstox - Unknown Symbol Is Skipped",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Only the valid symbol is returned\", function () {",
+                  "  pm.expect(pm.response.json().map(function (q) { return q.symbol; })).to.eql([\"RELIANCE\"]);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/upstox/quotes?symbols=RELIANCE,NOSUCHXYZ&exchange=NSE",
+            "description": "Unknown symbols are logged with details and left out; the valid ones still return."
+          },
+          "response": []
+        },
+        {
+          "name": "Upstox - Get Daily Candles (last month)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Every row is saved with createdDate and updatedDate\", function () {",
+                  "  var rows = pm.response.json();",
+                  "  pm.expect(rows).to.be.an(\"array\");",
+                  "  rows.forEach(function (row) {",
+                  "    pm.expect(row).to.have.property(\"createdDate\");",
+                  "    pm.expect(row).to.have.property(\"updatedDate\");",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/upstox/candles/{{indiaSymbol}}?exchange=NSE&unit=days&interval=1",
+            "description": "Daily candles; from/to (yyyy-MM-dd) default to the last month. Upserted to upstox_stock_candles: re-fetching updates existing candles instead of duplicating them."
+          },
+          "response": []
+        },
+        {
+          "name": "Upstox - Get 15-minute Candles (last 7 days)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Last 7 days: 1-15 minute candles are limited to 1 month per call by Upstox.",
+                  "var today = new Date();",
+                  "var weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);",
+                  "pm.collectionVariables.set(\"toDate\", today.toISOString().slice(0, 10));",
+                  "pm.collectionVariables.set(\"fromDate\", weekAgo.toISOString().slice(0, 10));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Every row is saved with createdDate and updatedDate\", function () {",
+                  "  var rows = pm.response.json();",
+                  "  pm.expect(rows).to.be.an(\"array\");",
+                  "  rows.forEach(function (row) {",
+                  "    pm.expect(row).to.have.property(\"createdDate\");",
+                  "    pm.expect(row).to.have.property(\"updatedDate\");",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/upstox/candles/{{indiaSymbol}}?exchange=NSE&unit=minutes&interval=15&from={{fromDate}}&to={{toDate}}",
+            "description": "Intraday candles. The pre-request script sets fromDate/toDate to the last 7 days. unit: minutes (1-300), hours (1-5), days, weeks, months."
           },
           "response": []
         }

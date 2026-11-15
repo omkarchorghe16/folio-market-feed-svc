@@ -1,0 +1,25 @@
+$kind: http-request
+description: "Daily candles; from/to (yyyy-MM-dd) default to the last month. Upserted to upstox_stock_candles: re-fetching updates existing candles instead of duplicating them."
+url: "{{url}}/api/india/upstox/candles/{{indiaSymbol}}?exchange=NSE&unit=days&interval=1"
+method: GET
+queryParams:
+  exchange: NSE
+  unit: days
+  interval: "1"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("Every row is saved with createdDate and updatedDate", function () {
+        var rows = pm.response.json();
+        pm.expect(rows).to.be.an("array");
+        rows.forEach(function (row) {
+          pm.expect(row).to.have.property("createdDate");
+          pm.expect(row).to.have.property("updatedDate");
+        });
+      });
+    language: text/javascript
+order: 13000

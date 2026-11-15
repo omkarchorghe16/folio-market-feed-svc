@@ -2,3 +2,6 @@ $kind: collection
 description: Postman collection for the local application. Select the Local environment to target http://localhost:8082.
 variables:
   apiPath: /api/digest
+  indiaSymbol: RELIANCE
+  fromDate: ""
+  toDate: ""

@@ -1,0 +1,35 @@
+$kind: http-request
+description: "Intraday candles. The pre-request script sets fromDate/toDate to the last 7 days. unit: minutes (1-300), hours (1-5), days, weeks, months."
+url: "{{url}}/api/india/upstox/candles/{{indiaSymbol}}?exchange=NSE&unit=minutes&interval=15&from={{fromDate}}&to={{toDate}}"
+method: GET
+queryParams:
+  exchange: NSE
+  unit: minutes
+  interval: "15"
+  from: "{{fromDate}}"
+  to: "{{toDate}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Last 7 days: 1-15 minute candles are limited to 1 month per call by Upstox.
+      var today = new Date();
+      var weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      pm.collectionVariables.set("toDate", today.toISOString().slice(0, 10));
+      pm.collectionVariables.set("fromDate", weekAgo.toISOString().slice(0, 10));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("Every row is saved with createdDate and updatedDate", function () {
+        var rows = pm.response.json();
+        pm.expect(rows).to.be.an("array");
+        rows.forEach(function (row) {
+          pm.expect(row).to.have.property("createdDate");
+          pm.expect(row).to.have.property("updatedDate");
+        });
+      });
+    language: text/javascript
+order: 14000

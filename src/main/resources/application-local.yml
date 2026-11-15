@@ -56,3 +56,5 @@ logging:
   level:
     com.stocknews: DEBUG
     org.springframework.web: DEBUG
+    # Outbound HTTP client DEBUG logs print request bodies (e.g. Tapetide's refresh token); keep at INFO.
+    org.springframework.web.client: INFO

@@ -1,0 +1,22 @@
+$kind: http-request
+description: "Overview with fundamentals, growth and pros/cons. include: technicals, ratings, peers. Saved to tapetide_stock_datasets (dataset=profile). Served from PostgreSQL if refreshed within tapetide.data-refresh-minutes (1440)."
+url: "{{url}}/api/india/tapetide/profile/{{indiaSymbol}}?include=ratings,peers"
+method: GET
+queryParams:
+  include: ratings,peers
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("200 with saved data, or 204 if the symbol was skipped (see app logs)", function () {
+        pm.expect(pm.response.code).to.be.oneOf([200, 204]);
+      });
+
+      if (pm.response.code === 200) {
+        pm.test("Saved row has createdDate and updatedDate", function () {
+          var body = pm.response.json();
+          pm.expect(body).to.have.property("createdDate");
+          pm.expect(body).to.have.property("updatedDate");
+        });
+      }
+    language: text/javascript
+order: 4000

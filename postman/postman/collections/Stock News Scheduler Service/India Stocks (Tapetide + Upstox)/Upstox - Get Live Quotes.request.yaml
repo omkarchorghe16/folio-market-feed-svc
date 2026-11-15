@@ -1,0 +1,28 @@
+$kind: http-request
+description: "Live quotes, upserted to upstox_stock_quotes (one row per symbol + exchange). exchange: NSE or BSE. Free; always fetched live."
+url: "{{url}}/api/india/upstox/quotes?symbols=RELIANCE,TCS,HDFCBANK&exchange=NSE"
+method: GET
+queryParams:
+  symbols: RELIANCE,TCS,HDFCBANK
+  exchange: NSE
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("Every row is saved with createdDate and updatedDate", function () {
+        var rows = pm.response.json();
+        pm.expect(rows).to.be.an("array");
+        rows.forEach(function (row) {
+          pm.expect(row).to.have.property("createdDate");
+          pm.expect(row).to.have.property("updatedDate");
+        });
+      });
+
+      pm.test("Returns one quote per symbol", function () {
+        pm.expect(pm.response.json().map(function (q) { return q.symbol; })).to.eql(["RELIANCE", "TCS", "HDFCBANK"]);
+      });
+    language: text/javascript
+order: 11000

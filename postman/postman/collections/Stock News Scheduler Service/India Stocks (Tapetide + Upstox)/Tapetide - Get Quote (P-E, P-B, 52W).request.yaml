@@ -1,0 +1,26 @@
+$kind: http-request
+name: Tapetide - Get Quote (P/E, P/B, 52W)
+description: Price, P/E (TTM), P/B and 52-week range. Saved to tapetide_stock_quotes. Served from PostgreSQL if refreshed within tapetide.quote-refresh-minutes (60); otherwise 1 Tapetide call. Returns 204 if the symbol is invalid/not found and nothing is saved.
+url: "{{url}}/api/india/tapetide/quote/{{indiaSymbol}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("200 with saved data, or 204 if the symbol was skipped (see app logs)", function () {
+        pm.expect(pm.response.code).to.be.oneOf([200, 204]);
+      });
+
+      if (pm.response.code === 200) {
+        pm.test("Saved row has createdDate and updatedDate", function () {
+          var body = pm.response.json();
+          pm.expect(body).to.have.property("createdDate");
+          pm.expect(body).to.have.property("updatedDate");
+        });
+        
+        pm.test("Quote has price and P/E", function () {
+          pm.expect(pm.response.json()).to.have.property("price");
+          pm.expect(pm.response.json()).to.have.property("peTtm");
+        });
+      }
+    language: text/javascript
+order: 2000

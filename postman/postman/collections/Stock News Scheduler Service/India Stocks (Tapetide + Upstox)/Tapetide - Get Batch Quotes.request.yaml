@@ -1,0 +1,23 @@
+$kind: http-request
+description: Quotes for many symbols (1 Tapetide call per 20 symbols needing a refresh). Unknown or invalid symbols are logged and left out. Batch quotes have no P/E; the last saved P/E is kept.
+url: "{{url}}/api/india/tapetide/quotes?symbols=RELIANCE,TCS,HDFCBANK"
+method: GET
+queryParams:
+  symbols: RELIANCE,TCS,HDFCBANK
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("Every row is saved with createdDate and updatedDate", function () {
+        var rows = pm.response.json();
+        pm.expect(rows).to.be.an("array");
+        rows.forEach(function (row) {
+          pm.expect(row).to.have.property("createdDate");
+          pm.expect(row).to.have.property("updatedDate");
+        });
+      });
+    language: text/javascript
+order: 3000
