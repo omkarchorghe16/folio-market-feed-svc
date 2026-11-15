@@ -1,0 +1,6 @@
+name: Stock News Scheduler - Local
+values:
+  - key: url
+    value: 'http://localhost:8082'
+  - key: apiPath
+    value: /api/digest

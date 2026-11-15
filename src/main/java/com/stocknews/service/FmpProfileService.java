@@ -18,9 +18,11 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Serves FMP company profiles from PostgreSQL, calling FMP only for symbols whose saved row was not
@@ -29,6 +31,9 @@ import java.util.Map;
 @Service
 @Slf4j
 public class FmpProfileService {
+    /** Each fetched symbol costs two FMP calls: profile + ratios-ttm (P/E, EPS). */
+    static final int CALLS_PER_SYMBOL = 2;
+
     private final FmpProfileClient client;
     private final FmpStockProfileRepository profileRepository;
     private final FmpApiCallRepository apiCallRepository;
@@ -78,10 +83,28 @@ public class FmpProfileService {
 
         if (!symbolsToFetch.isEmpty()) {
             validateCanFetch(symbolsToFetch);
-            symbolsToFetch.forEach(symbol ->
-                    profilesBySymbol.put(symbol, fetchAndUpsert(symbol, profilesBySymbol.get(symbol))));
+            List<String> skipped = new ArrayList<>();
+            for (String symbol : symbolsToFetch) {
+                FmpStockProfile stored = profilesBySymbol.remove(symbol);
+                try {
+                    profilesBySymbol.put(symbol, fetchAndUpsert(symbol, stored));
+                } catch (ResponseStatusException exception) {
+                    // One bad symbol must not fail the whole request: log it and continue with the rest.
+                    skipped.add(symbol);
+                    log.error("Skipping FMP profile for {}: status={}, reason={}",
+                            symbol, exception.getStatusCode().value(), exception.getReason());
+                    if (exception.getStatusCode().value() == HttpStatus.TOO_MANY_REQUESTS.value()) {
+                        log.error("FMP rate limit hit; not fetching remaining symbols this request");
+                        break;
+                    }
+                }
+            }
+            if (!skipped.isEmpty()) {
+                log.warn("FMP profiles skipped for {} symbol(s): {}", skipped.size(), skipped);
+            }
         }
-        return symbols.stream().map(profilesBySymbol::get).toList();
+        // Symbols that could not be fetched are left out of the response.
+        return symbols.stream().map(profilesBySymbol::get).filter(Objects::nonNull).toList();
     }
 
     private boolean isUpdatedOn(FmpStockProfile profile, LocalDate day) {
@@ -103,7 +126,7 @@ public class FmpProfileService {
         if (dailyRequestLimit < 1) {
             throw new IllegalStateException("FMP daily request limit must be greater than zero");
         }
-        checkDailyQuota(symbolsToFetch.size(), dailyRequestLimit);
+        checkDailyQuota(symbolsToFetch.size() * CALLS_PER_SYMBOL, dailyRequestLimit);
     }
 
     /**
@@ -113,6 +136,8 @@ public class FmpProfileService {
     private FmpStockProfile fetchAndUpsert(String symbol, FmpStockProfile stored) {
         recordApiCall();
         FmpStockProfile fetched = client.fetchProfile(symbol);
+        recordApiCall();
+        client.applyTtmRatios(fetched);
 
         LocalDateTime now = LocalDateTime.now(clock);
         if (stored != null) {

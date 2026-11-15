@@ -52,6 +52,14 @@ public class FmpStockProfile {
 
     private String priceRange;
 
+    /** Trailing-twelve-month price-to-earnings ratio from FMP ratios-ttm. */
+    @Column(precision = 24, scale = 8)
+    private BigDecimal peRatio;
+
+    /** Trailing-twelve-month earnings (net income) per share from FMP ratios-ttm. */
+    @Column(precision = 24, scale = 8)
+    private BigDecimal eps;
+
     @Column(precision = 24, scale = 8)
     private BigDecimal change;
 

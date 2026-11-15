@@ -1,0 +1,25 @@
+$kind: http-request
+url: "{{url}}/api/fmp/profiles?symbols=AAPL%2CMSFT"
+method: GET
+queryParams:
+  symbols: AAPL%2CMSFT
+scripts:
+  - type: afterResponse
+    code: |
+      pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("Returns full saved stock profiles", function () {
+        var profiles = pm.response.json();
+        pm.expect(profiles).to.be.an("array");
+        profiles.forEach(function (profile) {
+          pm.expect(profile).to.have.property("symbol");
+          pm.expect(profile).to.have.property("companyName");
+          pm.expect(profile).to.have.property("country");
+          pm.expect(profile).to.have.property("createdDate");
+          pm.expect(profile).to.have.property("updatedDate");
+        });
+      });
+    language: text/javascript
+order: 5000

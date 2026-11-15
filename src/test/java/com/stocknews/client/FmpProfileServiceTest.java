@@ -67,8 +67,9 @@ class FmpProfileServiceTest {
         assertEquals(List.of(fetched), result);
         assertEquals(NOW, fetched.getCreatedDate());
         assertEquals(NOW, fetched.getUpdatedDate());
-        verify(apiCallRepository, times(1)).saveAndFlush(any(FmpApiCall.class));
+        verify(apiCallRepository, times(2)).saveAndFlush(any(FmpApiCall.class));
         verify(client, times(1)).fetchProfile("AAPL");
+        verify(client, times(1)).applyTtmRatios(fetched);
     }
 
     @Test
@@ -133,24 +134,40 @@ class FmpProfileServiceTest {
         assertSame(msftToday, result.get(1));
         assertSame(nvdaNew, result.get(2));
         verify(client, never()).fetchProfile("MSFT");
-        verify(apiCallRepository, times(2)).saveAndFlush(any(FmpApiCall.class));
+        verify(apiCallRepository, times(4)).saveAndFlush(any(FmpApiCall.class));
     }
 
     @Test
-    void keepsEarlierFetchedProfilesWhenALaterSymbolFails() {
+    void skipsFailedSymbolAndContinuesWithTheRest() {
         FmpStockProfile aapl = profile("AAPL", null);
-        when(profileRepository.findAllBySymbolIn(List.of("AAPL", "BAD"))).thenReturn(List.of());
+        FmpStockProfile msft = profile("MSFT", null);
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL", "BAD", "MSFT"))).thenReturn(List.of());
         when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(0L);
         when(client.fetchProfile("AAPL")).thenReturn(aapl);
         when(client.fetchProfile("BAD")).thenThrow(new ResponseStatusException(
                 org.springframework.http.HttpStatus.NOT_FOUND, "FMP returned no profile for BAD"));
+        when(client.fetchProfile("MSFT")).thenReturn(msft);
+        when(profileRepository.saveAndFlush(any(FmpStockProfile.class))).thenAnswer(call -> call.getArgument(0));
+
+        List<FmpStockProfile> result = service.getProfiles(List.of("AAPL", "BAD", "MSFT"));
+
+        assertEquals(List.of(aapl, msft), result);
+    }
+
+    @Test
+    void stopsFetchingAfterFmpRateLimitButReturnsWhatWasFetched() {
+        FmpStockProfile aapl = profile("AAPL", null);
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL", "MSFT", "NVDA"))).thenReturn(List.of());
+        when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(0L);
+        when(client.fetchProfile("AAPL")).thenReturn(aapl);
+        when(client.fetchProfile("MSFT")).thenThrow(new ResponseStatusException(
+                org.springframework.http.HttpStatus.TOO_MANY_REQUESTS, "FMP profile lookup failed for MSFT"));
         when(profileRepository.saveAndFlush(aapl)).thenReturn(aapl);
 
-        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                () -> service.getProfiles(List.of("AAPL", "BAD")));
+        List<FmpStockProfile> result = service.getProfiles(List.of("AAPL", "MSFT", "NVDA"));
 
-        assertEquals(404, exception.getStatusCode().value());
-        verify(profileRepository).saveAndFlush(aapl);
+        assertEquals(List.of(aapl), result);
+        verify(client, never()).fetchProfile("NVDA");
     }
 
     @Test
@@ -160,6 +177,18 @@ class FmpProfileServiceTest {
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
                 () -> service.getProfiles(List.of("AAPL", "MSFT")));
+
+        assertEquals(429, exception.getStatusCode().value());
+        verify(client, never()).fetchProfile(any());
+    }
+
+    @Test
+    void countsTwoCallsPerSymbolAgainstDailyQuota() {
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL"))).thenReturn(List.of());
+        when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(249L);
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.getProfiles(List.of("AAPL")));
 
         assertEquals(429, exception.getStatusCode().value());
         verify(client, never()).fetchProfile(any());

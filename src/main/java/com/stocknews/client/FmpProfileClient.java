@@ -51,14 +51,44 @@ public class FmpProfileClient {
                     : HttpStatus.BAD_GATEWAY;
             throw new ResponseStatusException(status, "FMP profile lookup failed for " + symbol, exception);
         } catch (ResponseStatusException exception) {
-            log.error("FMP profile response was invalid for symbol {}:\n{}",
-                    symbol, ExceptionLog.stackTrace(exception));
+            log.error("FMP profile response was invalid for symbol {}: {}", symbol, exception.getReason());
             throw exception;
         } catch (Exception exception) {
             log.error("FMP profile request failed for symbol {}:\n{}",
                     symbol, ExceptionLog.stackTrace(exception));
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     "FMP profile lookup failed for " + symbol, exception);
+        }
+    }
+
+    /**
+     * Fills TTM P/E and EPS from {@code /stable/ratios-ttm} (available on the free plan). Best effort:
+     * a failure here is logged and leaves both fields null so the profile itself is still saved.
+     */
+    public void applyTtmRatios(FmpStockProfile profile) {
+        String symbol = profile.getSymbol();
+        try {
+            String response = restClient.get()
+                    .uri(UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+                            .pathSegment("ratios-ttm")
+                            .queryParam("symbol", symbol)
+                            .queryParam("apikey", properties.getApiKey())
+                            .build()
+                            .encode()
+                            .toUri())
+                    .retrieve()
+                    .body(String.class);
+            JsonNode ratios = objectMapper.readTree(response);
+            if (!ratios.isArray() || ratios.isEmpty()) {
+                log.warn("FMP returned no TTM ratios for {}; P/E and EPS left empty", symbol);
+                return;
+            }
+            JsonNode item = ratios.get(0);
+            profile.setPeRatio(decimal(item, "priceToEarningsRatioTTM"));
+            profile.setEps(decimal(item, "netIncomePerShareTTM"));
+        } catch (Exception exception) {
+            log.warn("FMP TTM ratios request failed for {}; P/E and EPS left empty:\n{}",
+                    symbol, ExceptionLog.stackTrace(exception));
         }
     }
 

@@ -7,8 +7,10 @@ import com.stocknews.logging.ExceptionLog;
 import com.stocknews.model.YahooStockProfile;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.server.ResponseStatusException;
@@ -17,6 +19,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -26,20 +29,28 @@ public class YahooStockProfileClient {
     private final AppProperties properties;
     private final ObjectMapper objectMapper;
 
+    private static final String USER_AGENT =
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) "
+                    + "Chrome/124.0 Safari/537.36";
+    private static final List<String> COOKIE_SOURCES = List.of("https://fc.yahoo.com", "https://finance.yahoo.com");
+
+    /** Yahoo requires a session cookie plus a matching crumb for quoteSummary calls. */
+    private record YahooSession(String cookie, String crumb) {
+    }
+
+    private volatile YahooSession session;
+
     public List<YahooStockProfile> fetchProfiles(List<String> symbols) {
         List<YahooStockProfile> profiles = new ArrayList<>();
         for (String symbol : symbols) {
             try {
-                String response = restClient.get()
-                        .uri(UriComponentsBuilder.fromUriString(properties.getApis().getYahooBaseUrl())
-                                .pathSegment("v10", "finance", "quoteSummary", symbol)
-                                .queryParam("modules", "assetProfile,summaryProfile,summaryDetail,price")
-                                .build()
-                                .encode()
-                                .toUri())
-                        .header("User-Agent", "Mozilla/5.0")
-                        .retrieve()
-                        .body(String.class);
+                String response;
+                try {
+                    response = requestProfile(symbol, getSession(false));
+                } catch (HttpClientErrorException.Unauthorized unauthorized) {
+                    log.warn("Yahoo Finance rejected crumb for {}; refreshing session and retrying", symbol);
+                    response = requestProfile(symbol, getSession(true));
+                }
                 profiles.add(parseProfile(symbol, response));
             } catch (RestClientException exception) {
                 log.error("Yahoo Finance profile request failed for symbol {}:\n{}",
@@ -49,6 +60,65 @@ public class YahooStockProfileClient {
             }
         }
         return profiles;
+    }
+
+    private String requestProfile(String symbol, YahooSession yahooSession) {
+        return restClient.get()
+                .uri(UriComponentsBuilder.fromUriString(properties.getApis().getYahooBaseUrl())
+                        .pathSegment("v10", "finance", "quoteSummary", symbol)
+                        .queryParam("modules", "assetProfile,summaryProfile,summaryDetail,price")
+                        .queryParam("crumb", yahooSession.crumb())
+                        .build()
+                        .encode()
+                        .toUri())
+                .header(HttpHeaders.USER_AGENT, USER_AGENT)
+                .header(HttpHeaders.COOKIE, yahooSession.cookie())
+                .retrieve()
+                .body(String.class);
+    }
+
+    private synchronized YahooSession getSession(boolean forceRefresh) {
+        if (session != null && !forceRefresh) {
+            return session;
+        }
+        String cookie = fetchCookie();
+        String crumb = restClient.get()
+                .uri(UriComponentsBuilder.fromUriString(properties.getApis().getYahooBaseUrl())
+                        .pathSegment("v1", "test", "getcrumb")
+                        .build()
+                        .toUri())
+                .header(HttpHeaders.USER_AGENT, USER_AGENT)
+                .header(HttpHeaders.COOKIE, cookie)
+                .retrieve()
+                .body(String.class);
+        if (crumb == null || crumb.isBlank() || crumb.contains("<")) {
+            throw new RestClientException("Yahoo Finance returned an invalid crumb");
+        }
+        session = new YahooSession(cookie, crumb.trim());
+        log.info("Obtained new Yahoo Finance session crumb");
+        return session;
+    }
+
+    private String fetchCookie() {
+        for (String source : COOKIE_SOURCES) {
+            try {
+                // fc.yahoo.com answers 404 but still sets the session cookie, so read headers without status handling.
+                List<String> setCookies = restClient.get()
+                        .uri(source)
+                        .header(HttpHeaders.USER_AGENT, USER_AGENT)
+                        .exchange((request, response) -> response.getHeaders().getOrEmpty(HttpHeaders.SET_COOKIE));
+                String cookie = setCookies.stream()
+                        .map(value -> value.split(";", 2)[0].trim())
+                        .filter(value -> !value.isEmpty())
+                        .collect(Collectors.joining("; "));
+                if (!cookie.isEmpty()) {
+                    return cookie;
+                }
+            } catch (RestClientException exception) {
+                log.warn("Could not obtain Yahoo Finance cookie from {}: {}", source, exception.getMessage());
+            }
+        }
+        throw new RestClientException("Could not obtain a Yahoo Finance session cookie");
     }
 
     private YahooStockProfile parseProfile(String symbol, String response) {

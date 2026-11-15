@@ -61,10 +61,23 @@ public class AlphaVantageOverviewClient {
         try {
             JsonNode root = objectMapper.readTree(response);
             log.info("Alpha Vantage overview response: {}", root);
-            /*if (root.has("Note") || root.has("Information")) {
-                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
-                        "Alpha Vantage rate limit reached; wait before retrying");
-            }*/
+            // Alpha Vantage reports plan/rate-limit problems as HTTP 200 with a "Note" or "Information" message.
+            String notice = text(root, "Information");
+            if (notice == null) {
+                notice = text(root, "Note");
+            }
+            if (notice != null) {
+                if (notice.toLowerCase().contains("premium endpoint")) {
+                    throw new ResponseStatusException(HttpStatus.PAYMENT_REQUIRED,
+                            "Alpha Vantage OVERVIEW requires a premium plan for the configured API key");
+                }
+                if (notice.toLowerCase().contains("rate limit") || notice.toLowerCase().contains("sparingly")) {
+                    throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                            "Alpha Vantage rate limit reached; wait before retrying");
+                }
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                        "Alpha Vantage request for " + symbol + " was rejected: " + notice);
+            }
             if (root.has("Error Message")) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Alpha Vantage did not recognize symbol " + symbol);

@@ -80,9 +80,9 @@ public class FmpProfileController {
         log.info("{} /api/fmp/profiles returning {} persisted profiles", method, profiles.size());
         profiles.forEach(profile -> log.info(
                 "{} /api/fmp/profiles response profile: id={}, symbol={}, companyName={}, country={}, "
-                        + "currency={}, exchange={}, industry={}, price={}, marketCap={}, sector={}, createdDate={}, updatedDate={}",
+                        + "currency={}, exchange={}, industry={}, price={}, marketCap={}, peRatio={}, eps={}, sector={}, createdDate={}, updatedDate={}",
                 method, profile.getId(), profile.getSymbol(), profile.getCompanyName(), profile.getCountry(),
                 profile.getCurrency(), profile.getExchange(), profile.getIndustry(), profile.getPrice(),
-                profile.getMarketCap(), profile.getSector(), profile.getCreatedDate(), profile.getUpdatedDate()));
+                profile.getMarketCap(), profile.getPeRatio(), profile.getEps(), profile.getSector(), profile.getCreatedDate(), profile.getUpdatedDate()));
     }
 }
