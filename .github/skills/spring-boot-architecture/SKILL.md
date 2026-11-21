@@ -20,6 +20,9 @@ application-wide conventions, affects deployment topology, or introduces a new s
 - `india/nse` keeps NSE's equity/ETF symbol lists as CSV files on local disk (`nse.storage-directory`),
   not in PostgreSQL; the files are re-downloaded at startup when missing, so pods/containers without a
   volume still work after a restart.
+- `us/nasdaq` follows the same design for US symbols: Nasdaq Trader's `nasdaqlisted.txt` and
+  `otherlisted.txt` are stored on local disk (`nasdaq.storage-directory`), not in PostgreSQL, and
+  re-downloaded at startup when missing.
 - PostgreSQL is the application datasource. H2 is configured for tests only; there is no production
   H2 mirror in the current architecture.
 - The service shares the `folio_pro` PostgreSQL database with investment-management-svc; both services'

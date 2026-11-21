@@ -21,7 +21,7 @@ build/
 # Database
 *.db
 *.h2.db
-./data/
+/data/
 *.dump
 
 # Logs

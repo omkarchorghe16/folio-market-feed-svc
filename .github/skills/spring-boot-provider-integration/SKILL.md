@@ -39,6 +39,11 @@ or another remote service.
   `NseSymbolCsvParser` (header-name based, quoted cells) before atomically replacing the stored copies
   in `nse.storage-directory`; a failed download never deletes the previous lists. Search reads the
   stored CSV files, caching parsed rows until a file's modification time changes.
+- US symbol lists (`us/nasdaq`) are keyless pipe-delimited downloads from Nasdaq Trader via the
+  `nasdaqRestClient` bean (timeout `nasdaq.timeout-seconds`). `NasdaqSymbolFileParser` finds columns by
+  header name, skips test issues, maps the `ETF` column to `type` and exchange codes to names, and
+  rejects a file without the closing `File Creation Time` line as truncated. `NasdaqSymbolService`
+  replaces both stored files only after both parse; search works like the NSE search.
 - Logs must not contain credentials, authorization headers, full credential-bearing URLs, raw
   provider responses, business-summary text, or unsanitized exception details that can reveal them.
 

@@ -17,6 +17,9 @@ delivery-channel behavior.
   on-demand entry point. It also syncs once on `ApplicationReadyEvent` when the CSV files are missing
   and `nse.sync-on-startup` is true (false in test configuration). Like `DigestScheduler`, it catches
   and logs job failures so one failed run does not stop later runs.
+- `NasdaqSymbolSyncScheduler` works the same way for the US symbol directory (`nasdaq.schedule.*`,
+  default daily 06:00 America/New_York; `POST /api/us/nasdaq/sync`; `nasdaq.sync-on-startup`, false in
+  test configuration).
 - `DigestService` composes news clients, deduplication, `DigestFormatter`, and notifier components.
   Keep provider-specific transport in news clients and channel-specific transport in notifier
   implementations.

@@ -13,3 +13,5 @@ spring:
 
 nse:
   sync-on-startup: false
+nasdaq:
+  sync-on-startup: false

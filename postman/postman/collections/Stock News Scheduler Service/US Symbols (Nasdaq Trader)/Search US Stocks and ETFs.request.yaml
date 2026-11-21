@@ -1,0 +1,15 @@
+$kind: http-request
+description: "Type-ahead search by ticker or name; best matches first. Reads the stored Nasdaq Trader files."
+url: "{{url}}/api/us/nasdaq/symbols?query=appl&limit=20"
+method: GET
+queryParams:
+  query: appl
+  limit: "20"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+      });
+    language: text/javascript
+order: 2000

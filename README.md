@@ -11,6 +11,7 @@ A complete Java Spring Boot application that fetches daily stock market news for
 - **Multi-Channel Notifications**: Slack, Telegram, WhatsApp (Twilio)
 - **On-Demand Triggers**: REST endpoints to manually trigger digests without waiting for schedule
 - **Stock Profiles**: Fetch Finnhub, Yahoo Finance, Alpha Vantage, and FMP company information and persist it in PostgreSQL
+- **US Symbols**: Every US-listed stock and ETF ticker and name (NASDAQ, NYSE, NYSE American, NYSE Arca, Cboe, IEX) from Nasdaq Trader's free symbol directory, synced daily, under `/api/us/nasdaq/*`
 - **India Stocks**: Tapetide (NSE/BSE fundamentals, profiles, financials, shareholding, forecasts, history) and Upstox (live quotes, candles) under `/api/india/*`, cached in PostgreSQL to save provider quota
 - **Browser access (CORS)**: `/api/**` accepts calls from the Folio Pro Angular app (`http://localhost:4200` by default)
 - **Sector and Stock Management**: CRUD endpoints for sectors and sector-associated stock tickers, including bulk stock creation
@@ -43,7 +44,8 @@ com/stocknews/
 │   └── WebConfig.java              # CORS for /api/** (cors.allowed-origins)
 ├── scheduler/
 │   ├── DigestScheduler.java        # Scheduled cron job
-│   └── NseSymbolSyncScheduler.java # Weekly NSE stock/ETF symbol-list download
+│   ├── NseSymbolSyncScheduler.java # Weekly NSE stock/ETF symbol-list download
+│   └── NasdaqSymbolSyncScheduler.java # Daily US (Nasdaq Trader) stock/ETF symbol-list download
 ├── digest/
 │   ├── DigestService.java          # Orchestrates fetch → dedup → format → notify
 │   └── DigestFormatter.java        # Formats messages for each channel
@@ -61,6 +63,7 @@ com/stocknews/
 ├── controller/
 │   ├── DigestController.java        # /api/digest/* (on-demand daily digest)
 │   ├── FmpProfileController.java    # /api/fmp/profiles
+│   ├── NasdaqSymbolController.java  # /api/us/nasdaq/* (US stock + ETF ticker search)
 │   ├── NseSymbolController.java     # /api/india/nse/* (stock + ETF ticker search)
 │   ├── SectorController.java
 │   ├── StockController.java
@@ -73,6 +76,8 @@ com/stocknews/
 │   ├── nse/                         # NSE symbol-list CSV client, parser + search service
 │   ├── tapetide/                    # Tapetide client + service (PostgreSQL-cached)
 │   └── upstox/                      # Upstox market-data client + service
+├── us/
+│   └── nasdaq/                      # Nasdaq Trader symbol-directory client, parser + search service
 ├── dto/                            # Validated requests and API response records
 ├── model/                          # JPA entities and provider-specific records
 ├── repository/                     # Spring Data repositories (PostgreSQL)
@@ -594,6 +599,41 @@ Symbols are bare NSE tickers (`RELIANCE`), the same format the Tapetide and Upst
 For a dropdown, debounce typing (~250 ms) and call with `limit=20`. Postman requests are in the
 "India NSE Symbols" folder.
 
+### US Symbols (stock + ETF ticker search, Nasdaq Trader)
+
+Type-ahead data for a US stock/ETF dropdown, built the same way as the NSE search above.
+`NasdaqSymbolSyncScheduler` downloads Nasdaq Trader's free, official symbol directory every day
+(default **06:00 America/New_York**); no API key needed:
+
+- NASDAQ: `https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt`
+- NYSE, NYSE American, NYSE Arca, Cboe, IEX: `https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt`
+
+The files are pipe-delimited; each row's `ETF` column (Y/N) sets `type`, and test issues are skipped
+(about 13,000 symbols in total). They are saved as `nasdaq-listed.txt` and `other-listed.txt` in
+`nasdaq.storage-directory` (default `./data/us`, git-ignored). A download is accepted only when it
+parses and ends with Nasdaq Trader's `File Creation Time` line, and both files are replaced only after
+both downloads pass, so a failed or truncated download keeps the previous lists. Missing files are
+downloaded once at startup (`nasdaq.sync-on-startup`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/us/nasdaq/symbols?query=appl&type=EQUITY&limit=20` | Search by ticker or name with the same ranking as the NSE search. `type` is `EQUITY` or `ETF` (omit for both); `limit` 1–20000 (omit for all). Omit `query` for the full list. **503** until the lists have been downloaded once |
+| POST | `/api/us/nasdaq/sync` | Download both files now; returns `{equities, etfs, syncedAt}`. **502** if Nasdaq Trader fails (previous lists kept) |
+
+```bash
+curl 'http://localhost:8082/api/us/nasdaq/symbols?query=spy&type=ETF&limit=5'
+```
+
+```json
+[{"symbol":"SPY","name":"State Street SPDR S&P 500 ETF Trust","type":"ETF","exchange":"NYSE Arca"}]
+```
+
+`exchange` is `NASDAQ`, `NYSE`, `NYSE American`, `NYSE Arca`, `Cboe BZX` or `IEX`; any other exchange
+code Nasdaq Trader adds is returned as its one-letter code. Symbols use Nasdaq Trader's format
+(`BRK.B`; preferred shares like `ABR$D`; units and warrants like `AAC.U`, `AAC.W`), and names are
+returned as published (`Apple Inc. - Common Stock`). Postman requests are in the "US Symbols (Nasdaq
+Trader)" folder.
+
 ### Adding Stock Symbols
 
 Add a list of ticker symbols to an existing sector. The service normalizes tickers, creates records
@@ -689,6 +729,22 @@ nse:
 
 In Docker/Kubernetes the files live in the container (`/app/data/nse`) and are re-downloaded on
 startup after a restart; mount a volume at that path to keep them.
+
+US symbol directory (no key; see "US Symbols" above):
+
+```yaml
+nasdaq:
+  nasdaq-listed-url: ${NASDAQ_LISTED_URL:https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt}
+  other-listed-url: ${NASDAQ_OTHER_LISTED_URL:https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt}
+  storage-directory: ${NASDAQ_STORAGE_DIRECTORY:./data/us}
+  timeout-seconds: ${NASDAQ_TIMEOUT_SECONDS:30}
+  sync-on-startup: ${NASDAQ_SYNC_ON_STARTUP:true}
+  schedule:
+    cron-expression: ${NASDAQ_SCHEDULE_CRON_EXPRESSION:0 0 6 * * *}
+    timezone: ${NASDAQ_SCHEDULE_TIMEZONE:America/New_York}
+```
+
+As with NSE, the container keeps these in `/app/data/us` and re-downloads them after a restart.
 
 ### Stock News API Keys
 

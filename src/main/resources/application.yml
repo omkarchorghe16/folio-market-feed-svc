@@ -71,6 +71,20 @@ nse:
     cron-expression: ${NSE_SCHEDULE_CRON_EXPRESSION:0 0 6 * * SUN}  # Sundays 06:00
     timezone: ${NSE_SCHEDULE_TIMEZONE:Asia/Kolkata}
 
+nasdaq:
+  # Free, official US symbol directory from Nasdaq Trader (no API key): nasdaqlisted.txt covers NASDAQ,
+  # otherlisted.txt covers NYSE, NYSE American, NYSE Arca, Cboe and IEX. Downloaded daily to
+  # storage-directory and read by GET /api/us/nasdaq/symbols.
+  nasdaq-listed-url: ${NASDAQ_LISTED_URL:https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt}
+  other-listed-url: ${NASDAQ_OTHER_LISTED_URL:https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt}
+  storage-directory: ${NASDAQ_STORAGE_DIRECTORY:./data/us}
+  timeout-seconds: ${NASDAQ_TIMEOUT_SECONDS:30}
+  # Download once at startup when the files are missing (first run or a fresh container).
+  sync-on-startup: ${NASDAQ_SYNC_ON_STARTUP:true}
+  schedule:
+    cron-expression: ${NASDAQ_SCHEDULE_CRON_EXPRESSION:0 0 6 * * *}  # Every day 06:00
+    timezone: ${NASDAQ_SCHEDULE_TIMEZONE:America/New_York}
+
 app:
   notifications:
     # Secret-file property names map directly to app.notifications.* below.

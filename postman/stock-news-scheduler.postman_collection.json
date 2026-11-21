@@ -1267,6 +1267,127 @@
       ]
     },
     {
+      "name": "US Symbols (Nasdaq Trader)",
+      "description": "All US-listed stock and ETF ticker symbols and names for dropdowns (NASDAQ, NYSE, NYSE American, NYSE Arca, Cboe, IEX). Synced daily (06:00 America/New_York) from Nasdaq Trader's free symbol directory; no API key.",
+      "item": [
+        {
+          "name": "Sync US Stock and ETF Lists",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{url}}/api/us/nasdaq/sync",
+            "description": "Download nasdaqlisted.txt and otherlisted.txt now (the scheduler does this daily). Returns equity/ETF counts. 502 if Nasdaq Trader fails; previous lists are kept."
+          },
+          "response": []
+        },
+        {
+          "name": "Search US Stocks and ETFs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/us/nasdaq/symbols?query=appl&limit=20",
+            "description": "Type-ahead search by ticker or name; best matches first. Reads the stored Nasdaq Trader files."
+          },
+          "response": []
+        },
+        {
+          "name": "Search US ETFs Only",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/us/nasdaq/symbols?query=spy&type=ETF&limit=20",
+            "description": "type=ETF returns only rows whose ETF column is Y."
+          },
+          "response": []
+        },
+        {
+          "name": "List All US Equities",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/us/nasdaq/symbols?type=EQUITY",
+            "description": "No query returns every symbol of the type, ordered by ticker."
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Invalid US Symbol Type",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/us/nasdaq/symbols?type=BOND",
+            "description": "type must be EQUITY or ETF; anything else is 400."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Actuator",
       "item": [
         {

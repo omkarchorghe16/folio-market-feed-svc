@@ -22,6 +22,8 @@ public class RestClientConfig {
 
     private final NseProperties nseProperties;
 
+    private final NasdaqProperties nasdaqProperties;
+
     @Bean
     @Primary
     public RestClient restClient() {
@@ -38,6 +40,12 @@ public class RestClientConfig {
     @Bean
     public RestClient nseRestClient() {
         return withTimeout(nseProperties.getTimeoutSeconds());
+    }
+
+    /** Nasdaq Trader symbol-directory downloads (about 350 KB and 550 KB). */
+    @Bean
+    public RestClient nasdaqRestClient() {
+        return withTimeout(nasdaqProperties.getTimeoutSeconds());
     }
 
     private static RestClient withTimeout(int timeoutSeconds) {

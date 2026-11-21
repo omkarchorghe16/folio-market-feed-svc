@@ -1,0 +1,12 @@
+$kind: http-request
+description: "Download nasdaqlisted.txt and otherlisted.txt now (the scheduler does this daily). Returns equity/ETF counts. 502 if Nasdaq Trader fails; previous lists are kept."
+url: "{{url}}/api/us/nasdaq/sync"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+      });
+    language: text/javascript
+order: 1000
