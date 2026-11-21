@@ -34,6 +34,11 @@ or another remote service.
   `fmp.profile-refresh-time-zone`) is served from PostgreSQL; any other symbol is fetched from FMP for
   that symbol only and upserted immediately, keeping `id` and `created_date`. Key, US-exchange, and
   quota checks run only when a fetch is needed.
+- NSE symbol lists (`india/nse`) are keyless CSV downloads via the `nseRestClient` bean (timeout
+  `nse.timeout-seconds`, browser-like `User-Agent`). `NseSymbolService` validates both files with
+  `NseSymbolCsvParser` (header-name based, quoted cells) before atomically replacing the stored copies
+  in `nse.storage-directory`; a failed download never deletes the previous lists. Search reads the
+  stored CSV files, caching parsed rows until a file's modification time changes.
 - Logs must not contain credentials, authorization headers, full credential-bearing URLs, raw
   provider responses, business-summary text, or unsanitized exception details that can reveal them.
 

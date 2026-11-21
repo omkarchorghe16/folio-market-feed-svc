@@ -1,0 +1,14 @@
+$kind: http-request
+description: "No query returns every NSE equity, ordered by ticker."
+url: "{{url}}/api/india/nse/symbols?type=EQUITY"
+method: GET
+queryParams:
+  type: EQUITY
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+      });
+    language: text/javascript
+order: 4000

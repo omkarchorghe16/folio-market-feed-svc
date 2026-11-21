@@ -1146,6 +1146,127 @@
       ]
     },
     {
+      "name": "India NSE Symbols",
+      "description": "All NSE stock and ETF ticker symbols and names for dropdowns. Synced weekly (Sunday 06:00 IST) from NSE's free official CSV files; no API key.",
+      "item": [
+        {
+          "name": "Sync NSE Stock and ETF Lists",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{url}}/api/india/nse/sync",
+            "description": "Download NSE's EQUITY_L.csv and eq_etfseclist.csv now (the scheduler does this weekly). Returns equity/ETF counts. 502 if NSE fails; previous lists are kept."
+          },
+          "response": []
+        },
+        {
+          "name": "Search NSE Stocks and ETFs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/nse/symbols?query=reli&limit=20",
+            "description": "Type-ahead search by ticker or name; best matches first. Reads the stored NSE CSV files."
+          },
+          "response": []
+        },
+        {
+          "name": "Search NSE ETFs Only",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/nse/symbols?query=nifty&type=ETF&limit=20",
+            "description": "type=ETF returns only ETFs from eq_etfseclist.csv."
+          },
+          "response": []
+        },
+        {
+          "name": "List All NSE Equities",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/nse/symbols?type=EQUITY",
+            "description": "No query returns every NSE equity, ordered by ticker."
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Invalid NSE Symbol Type",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status code is 400\", function () {",
+                  "  pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/nse/symbols?type=BOND",
+            "description": "type must be EQUITY or ETF."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Actuator",
       "item": [
         {

@@ -1,0 +1,3 @@
+$kind: collection
+description: "All NSE stock and ETF ticker symbols and names for dropdowns. Synced weekly (Sunday 06:00 IST) from NSE's free official CSV files; no API key."
+order: 4500

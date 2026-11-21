@@ -37,12 +37,13 @@ com/stocknews/
 ├── StockNewsApplication.java
 ├── config/
 │   ├── AppProperties.java          # app.* (notifications, APIs, schedule)
-│   ├── FmpProperties.java / TapetideProperties.java / UpstoxProperties.java
+│   ├── FmpProperties.java / TapetideProperties.java / UpstoxProperties.java / NseProperties.java
 │   ├── OpenApiConfiguration.java
 │   ├── RestClientConfig.java       # one RestClient per provider
 │   └── WebConfig.java              # CORS for /api/** (cors.allowed-origins)
 ├── scheduler/
-│   └── DigestScheduler.java        # Scheduled cron job
+│   ├── DigestScheduler.java        # Scheduled cron job
+│   └── NseSymbolSyncScheduler.java # Weekly NSE stock/ETF symbol-list download
 ├── digest/
 │   ├── DigestService.java          # Orchestrates fetch → dedup → format → notify
 │   └── DigestFormatter.java        # Formats messages for each channel
@@ -61,12 +62,14 @@ com/stocknews/
 │   ├── DigestTriggerController.java
 │   ├── FmpProfileController.java    # /api/fmp/profiles
 │   ├── IndiaStockController.java    # /api/india/tapetide/*, /api/india/upstox/*
+│   ├── NseSymbolController.java     # /api/india/nse/* (stock + ETF ticker search)
 │   ├── SectorController.java
 │   ├── StockController.java
 │   ├── StockProfileController.java  # Finnhub / Yahoo / Alpha Vantage profiles
 │   └── StockSymbolController.java
 ├── india/
 │   ├── IndiaSymbols.java            # NSE symbol normalization
+│   ├── nse/                         # NSE symbol-list CSV client, parser + search service
 │   ├── tapetide/                    # Tapetide client + service (PostgreSQL-cached)
 │   └── upstox/                      # Upstox market-data client + service
 ├── dto/                            # Validated requests and API response records
@@ -559,6 +562,37 @@ curl 'http://localhost:8082/api/india/tapetide/profile/RELIANCE?include=ratings,
 
 Postman requests are in the "India Stocks (Tapetide + Upstox)" folder of the collection.
 
+### India NSE Symbols (stock + ETF ticker search)
+
+Type-ahead data for an India stock/ETF dropdown. `NseSymbolSyncScheduler` downloads NSE's free,
+official lists once a week (default **Sunday 06:00 Asia/Kolkata**) — no API key needed:
+
+- Equities: `https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv`
+- ETFs: `https://nsearchives.nseindia.com/content/equities/eq_etfseclist.csv`
+
+They are saved as `nse-equities.csv` and `nse-etfs.csv` in `nse.storage-directory` (default
+`./data/nse`, git-ignored). Both files are replaced only after both downloads parse, so a failed or
+blocked download keeps the previous lists. When the files are missing at startup (first run, new
+container) they are downloaded once immediately (`nse.sync-on-startup`). The search endpoint reads
+the CSV files and keeps the parsed rows in memory until a file changes.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/india/nse/symbols?query=reli&type=EQUITY&limit=20` | Search by ticker or name, best matches first (exact ticker, ticker prefix, name prefix, word prefix, then contains). `type` is `EQUITY` or `ETF` (omit for both); `limit` 1–5000 (omit for all). Omit `query` for the full list. **503** until the lists have been downloaded once |
+| POST | `/api/india/nse/sync` | Download both lists now; returns `{equities, etfs, syncedAt}`. **502** if NSE fails (previous lists kept) |
+
+```bash
+curl 'http://localhost:8082/api/india/nse/symbols?query=nifty&type=ETF&limit=10'
+```
+
+```json
+[{"symbol":"NIFTYBEES","name":"Nippon India ETF Nifty 50 BeES","type":"ETF","series":null,"isin":"INF204KB14I2"}]
+```
+
+Symbols are bare NSE tickers (`RELIANCE`), the same format the Tapetide and Upstox endpoints take.
+For a dropdown, debounce typing (~250 ms) and call with `limit=20`. Postman requests are in the
+"India NSE Symbols" folder.
+
 ### Adding Stock Symbols
 
 Add a list of ticker symbols to an existing sector. The service normalizes tickers, creates records
@@ -641,6 +675,20 @@ app:
     timezone: "America/Chicago"
 ```
 
+NSE symbol lists (no key; see "India NSE Symbols" above):
+
+```yaml
+nse:
+  equity-list-url: ${NSE_EQUITY_LIST_URL:https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv}
+  etf-list-url: ${NSE_ETF_LIST_URL:https://nsearchives.nseindia.com/content/equities/eq_etfseclist.csv}
+  storage-directory: ${NSE_STORAGE_DIRECTORY:./data/nse}
+  timeout-seconds: ${NSE_TIMEOUT_SECONDS:30}
+  sync-on-startup: ${NSE_SYNC_ON_STARTUP:true}
+```
+
+In Docker/Kubernetes the files live in the container (`/app/data/nse`) and are re-downloaded on
+startup after a restart; mount a volume at that path to keep them.
+
 ### Stock News API Keys
 
 The service supports two news providers. At least one key is required to receive news:
@@ -701,6 +749,15 @@ app:
   schedule:
     cron-expression: "0 0 9 * * MON-FRI"  # Cron format: second, minute, hour, day, month, day-of-week
     timezone: "America/Chicago"
+```
+
+The NSE symbol-list download has its own weekly schedule:
+
+```yaml
+nse:
+  schedule:
+    cron-expression: "0 0 6 * * SUN"  # NSE_SCHEDULE_CRON_EXPRESSION
+    timezone: "Asia/Kolkata"           # NSE_SCHEDULE_TIMEZONE
 ```
 
 ### Common Cron Examples

@@ -17,6 +17,9 @@ application-wide conventions, affects deployment topology, or introduces a new s
 - `config` binds typed settings and configures shared infrastructure such as `RestClient`.
 - `scheduler` triggers scheduled workflows; `digest` coordinates news fetching, deduplication,
   formatting, and notification delivery; `notification` owns channel-specific delivery.
+- `india/nse` keeps NSE's equity/ETF symbol lists as CSV files on local disk (`nse.storage-directory`),
+  not in PostgreSQL; the files are re-downloaded at startup when missing, so pods/containers without a
+  volume still work after a restart.
 - PostgreSQL is the application datasource. H2 is configured for tests only; there is no production
   H2 mirror in the current architecture.
 - The service shares the `folio_pro` PostgreSQL database with investment-management-svc; both services'
