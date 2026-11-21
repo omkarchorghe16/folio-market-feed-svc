@@ -20,6 +20,8 @@ public class RestClientConfig {
 
     private final TapetideProperties tapetideProperties;
 
+    private final NseProperties nseProperties;
+
     @Bean
     @Primary
     public RestClient restClient() {
@@ -30,6 +32,12 @@ public class RestClientConfig {
     @Bean
     public RestClient tapetideRestClient() {
         return withTimeout(tapetideProperties.getTimeoutSeconds());
+    }
+
+    /** NSE symbol-list CSV downloads (a few hundred KB each). */
+    @Bean
+    public RestClient nseRestClient() {
+        return withTimeout(nseProperties.getTimeoutSeconds());
     }
 
     private static RestClient withTimeout(int timeoutSeconds) {

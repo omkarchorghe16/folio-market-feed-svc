@@ -12,6 +12,11 @@ delivery-channel behavior.
 
 - `DigestScheduler` triggers `DigestService`; `DigestTriggerController` is the on-demand HTTP entry
   point. Keep scheduling separate from orchestration and delivery.
+- `NseSymbolSyncScheduler` runs the weekly NSE symbol-list download (`nse.schedule.*`, default
+  Sunday 06:00 Asia/Kolkata) through `NseSymbolService.sync()`; `POST /api/india/nse/sync` is its
+  on-demand entry point. It also syncs once on `ApplicationReadyEvent` when the CSV files are missing
+  and `nse.sync-on-startup` is true (false in test configuration). Like `DigestScheduler`, it catches
+  and logs job failures so one failed run does not stop later runs.
 - `DigestService` composes news clients, deduplication, `DigestFormatter`, and notifier components.
   Keep provider-specific transport in news clients and channel-specific transport in notifier
   implementations.

@@ -58,6 +58,19 @@ upstox:
   base-url: ${UPSTOX_BASE_URL:https://api.upstox.com}
   access-token: ${UPSTOX_ACCESS_TOKEN:}
 
+nse:
+  # Free, official NSE symbol lists (no API key). Downloaded weekly to storage-directory as CSV files
+  # and read by GET /api/india/nse/symbols. NSE blocks requests without a browser-like User-Agent.
+  equity-list-url: ${NSE_EQUITY_LIST_URL:https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv}
+  etf-list-url: ${NSE_ETF_LIST_URL:https://nsearchives.nseindia.com/content/equities/eq_etfseclist.csv}
+  storage-directory: ${NSE_STORAGE_DIRECTORY:./data/nse}
+  timeout-seconds: ${NSE_TIMEOUT_SECONDS:30}
+  # Download once at startup when the CSV files are missing (first run or a fresh container).
+  sync-on-startup: ${NSE_SYNC_ON_STARTUP:true}
+  schedule:
+    cron-expression: ${NSE_SCHEDULE_CRON_EXPRESSION:0 0 6 * * SUN}  # Sundays 06:00
+    timezone: ${NSE_SCHEDULE_TIMEZONE:Asia/Kolkata}
+
 app:
   notifications:
     # Secret-file property names map directly to app.notifications.* below.

@@ -1,0 +1,12 @@
+$kind: http-request
+description: "Download NSE's EQUITY_L.csv and eq_etfseclist.csv now (the scheduler does this weekly). Returns equity/ETF counts. 502 if NSE fails; previous lists are kept."
+url: "{{url}}/api/india/nse/sync"
+method: POST
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test("Status code is 200", function () {
+        pm.response.to.have.status(200);
+      });
+    language: text/javascript
+order: 1000
