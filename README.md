@@ -61,11 +61,12 @@ com/stocknews/
 ├── controller/
 │   ├── DigestController.java        # /api/digest/* (on-demand daily digest)
 │   ├── FmpProfileController.java    # /api/fmp/profiles
-│   ├── IndiaStockController.java    # /api/india/tapetide/*, /api/india/upstox/*
 │   ├── NseSymbolController.java     # /api/india/nse/* (stock + ETF ticker search)
 │   ├── SectorController.java
 │   ├── StockController.java
 │   ├── StockSymbolController.java
+│   ├── TapetideStockController.java # /api/india/tapetide/* (fundamentals)
+│   ├── UpstoxMarketDataController.java # /api/india/upstox/* (quotes, candles)
 │   └── UsStockProfileController.java # Finnhub / Yahoo / Alpha Vantage profiles
 ├── india/
 │   ├── IndiaSymbols.java            # NSE symbol normalization

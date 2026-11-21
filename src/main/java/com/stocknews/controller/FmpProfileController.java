@@ -57,7 +57,7 @@ public class FmpProfileController {
     }
 
     @PostMapping("/profiles")
-    @Operation(summary = "Fetch Financial Modeling Prep company profiles",
+    @Operation(summary = "Get FMP stock profiles (symbols in a JSON body)",
             description = "Same as GET with a JSON body: profiles updated today are read from PostgreSQL; any symbol "
                     + "not updated today (or not saved yet) is fetched from FMP for that symbol only, upserted by "
                     + "symbol, and returned.")
@@ -69,7 +69,7 @@ public class FmpProfileController {
             @ApiResponse(responseCode = "503", description = "FMP API key is not configured"),
             @ApiResponse(responseCode = "502", description = "FMP request failed")
     })
-    public List<FmpStockProfile> fetchProfiles(@Valid @RequestBody StockSymbolsRequest request) {
+    public List<FmpStockProfile> getProfiles(@Valid @RequestBody StockSymbolsRequest request) {
         log.info("Received FMP stock profile request for {} symbols", request.symbols().size());
         List<FmpStockProfile> profiles = fmpProfileService.getProfiles(request.symbols());
         logReturnedProfiles("POST", profiles);

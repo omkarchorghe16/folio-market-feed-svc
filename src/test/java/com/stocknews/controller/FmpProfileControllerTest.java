@@ -29,7 +29,7 @@ class FmpProfileControllerTest {
     private FmpProfileService fmpProfileService;
 
     @Test
-    void fetchProfilesAcceptsSymbolList() throws Exception {
+    void postProfilesAcceptsSymbolListInBody() throws Exception {
         FmpStockProfile profile = new FmpStockProfile();
         profile.setSymbol("AAPL");
         profile.setCompanyName("Apple Inc.");
@@ -52,7 +52,7 @@ class FmpProfileControllerTest {
     }
 
     @Test
-    void fetchProfilesRejectsEmptySymbolList() throws Exception {
+    void postProfilesRejectsEmptySymbolList() throws Exception {
         mockMvc.perform(post("/api/fmp/profiles")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"symbols\":[]}"))
