@@ -40,8 +40,8 @@ public class UpstoxMarketDataClient {
             + "(Analytics tab) and set UPSTOX_ACCESS_TOKEN";
 
     private final RestClient restClient;
-    private final UpstoxProperties properties;
-    private final UpstoxInstrumentRegistry instruments;
+    private final UpstoxProperties upstoxProperties;
+    private final UpstoxInstrumentRegistry upstoxInstrumentRegistry;
     private final ObjectMapper objectMapper;
 
     public record UpstoxQuote(String symbol, String exchange, String name, String isin, String instrumentKey,
@@ -58,11 +58,11 @@ public class UpstoxMarketDataClient {
      * Full market quotes in request order. Symbols Upstox does not list are logged and skipped so the
      * other symbols still return.
      */
-    public List<UpstoxQuote> quotes(List<String> symbols, String exchange) {
+    public List<UpstoxQuote> fetchQuotes(List<String> symbols, String exchange) {
         String venue = exchange(exchange);
         Map<String, Instrument> byKey = new LinkedHashMap<>();
         for (String symbol : symbols) {
-            instruments.find(venue, symbol).ifPresentOrElse(
+            upstoxInstrumentRegistry.find(venue, symbol).ifPresentOrElse(
                     instrument -> byKey.put(instrument.instrumentKey(), instrument),
                     () -> log.error("Skipping Upstox quote for {}: not an {} equity symbol", symbol, venue));
         }
@@ -74,7 +74,7 @@ public class UpstoxMarketDataClient {
         List<String> keys = new ArrayList<>(byKey.keySet());
         for (int start = 0; start < keys.size(); start += MAX_KEYS_PER_CALL) {
             List<String> chunk = keys.subList(start, Math.min(start + MAX_KEYS_PER_CALL, keys.size()));
-            URI uri = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+            URI uri = UriComponentsBuilder.fromUriString(upstoxProperties.getBaseUrl())
                     .path("/v2/market-quote/quotes")
                     .queryParam("instrument_key", String.join(",", chunk))
                     .encode()
@@ -106,8 +106,8 @@ public class UpstoxMarketDataClient {
      * Historical OHLCV candles. {@code unit}: minutes (interval 1-300), hours (1-5), days, weeks,
      * months (interval 1). Minute data starts January 2022; daily data starts January 2000.
      */
-    public List<UpstoxCandle> candles(String symbol, String exchange, String unit, int interval,
-                                      LocalDate from, LocalDate to) {
+    public List<UpstoxCandle> fetchCandles(String symbol, String exchange, String unit, int interval,
+                                           LocalDate from, LocalDate to) {
         String venue = exchange(exchange);
         String candleUnit = unit.toLowerCase(Locale.ROOT);
         if (!UNITS.contains(candleUnit)) {
@@ -116,10 +116,10 @@ public class UpstoxMarketDataClient {
         if (from != null && from.isAfter(to)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be on or before to");
         }
-        Instrument instrument = instruments.find(venue, symbol).orElseThrow(() ->
+        Instrument instrument = upstoxInstrumentRegistry.find(venue, symbol).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, symbol + " is not an " + venue + " equity symbol"));
 
-        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(upstoxProperties.getBaseUrl())
                 .pathSegment("v3", "historical-candle", instrument.instrumentKey(), candleUnit,
                         String.valueOf(interval), to.toString());
         if (from != null) {
@@ -138,7 +138,7 @@ public class UpstoxMarketDataClient {
     }
 
     private JsonNode get(URI uri, String what) {
-        String token = properties.getAccessToken();
+        String token = upstoxProperties.getAccessToken();
         if (token == null || token.isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Upstox access token is not configured. " + TOKEN_HELP);

@@ -38,19 +38,21 @@ public class UpstoxInstrumentRegistry {
     }
 
     private final RestClient restClient;
-    private final UpstoxProperties properties;
+    private final UpstoxProperties upstoxProperties;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final Map<String, Snapshot> snapshots = new ConcurrentHashMap<>();
 
     @org.springframework.beans.factory.annotation.Autowired
-    public UpstoxInstrumentRegistry(RestClient restClient, UpstoxProperties properties, ObjectMapper objectMapper) {
-        this(restClient, properties, objectMapper, Clock.system(ZoneId.of(properties.getTimeZone())));
+    public UpstoxInstrumentRegistry(RestClient restClient, UpstoxProperties upstoxProperties,
+                                    ObjectMapper objectMapper) {
+        this(restClient, upstoxProperties, objectMapper, Clock.system(ZoneId.of(upstoxProperties.getTimeZone())));
     }
 
-    UpstoxInstrumentRegistry(RestClient restClient, UpstoxProperties properties, ObjectMapper objectMapper, Clock clock) {
+    UpstoxInstrumentRegistry(RestClient restClient, UpstoxProperties upstoxProperties, ObjectMapper objectMapper,
+                             Clock clock) {
         this.restClient = restClient;
-        this.properties = properties;
+        this.upstoxProperties = upstoxProperties;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -88,7 +90,7 @@ public class UpstoxInstrumentRegistry {
     }
 
     private Map<String, Instrument> download(String exchange) throws IOException {
-        String url = properties.getInstrumentsUrl().replace("{exchange}", exchange);
+        String url = upstoxProperties.getInstrumentsUrl().replace("{exchange}", exchange);
         String equitySegment = exchange + "_EQ";
         try {
             return restClient.get().uri(url).exchange((request, response) -> {

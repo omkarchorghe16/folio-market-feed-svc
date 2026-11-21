@@ -15,23 +15,24 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 public class YahooStockProfileService {
-    private final YahooStockProfileClient client;
-    private final YahooStockProfileRepository repository;
+    private final YahooStockProfileClient yahooStockProfileClient;
+    private final YahooStockProfileRepository yahooStockProfileRepository;
 
     @Transactional
-    public List<YahooStockProfile> fetchAndSave(List<String> requestedSymbols) {
+    public List<YahooStockProfile> refreshProfiles(List<String> requestedSymbols) {
         List<String> symbols = StockSymbolNormalizer.normalize(requestedSymbols);
         log.debug("Fetching Yahoo Finance profiles for {} unique symbols", symbols.size());
-        List<YahooStockProfile> profiles = client.fetchProfiles(symbols);
+        List<YahooStockProfile> profiles = yahooStockProfileClient.fetchProfiles(symbols);
         Map<String, YahooStockProfile> existing = new LinkedHashMap<>();
-        repository.findAllBySymbolIn(symbols).forEach(profile -> existing.put(profile.getSymbol(), profile));
+        yahooStockProfileRepository.findAllBySymbolIn(symbols)
+                .forEach(profile -> existing.put(profile.getSymbol(), profile));
         profiles.forEach(profile -> {
             YahooStockProfile stored = existing.get(profile.getSymbol());
             if (stored != null) {
                 profile.setId(stored.getId());
             }
         });
-        List<YahooStockProfile> saved = repository.saveAll(profiles);
+        List<YahooStockProfile> saved = yahooStockProfileRepository.saveAll(profiles);
         log.info("Saved {} Yahoo Finance stock profiles to PostgreSQL", saved.size());
         return saved;
     }

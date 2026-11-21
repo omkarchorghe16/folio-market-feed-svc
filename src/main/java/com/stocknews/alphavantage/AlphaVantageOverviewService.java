@@ -16,25 +16,26 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 public class AlphaVantageOverviewService {
-    private final AlphaVantageOverviewClient client;
-    private final AlphaVantageOverviewRepository repository;
+    private final AlphaVantageOverviewClient alphaVantageOverviewClient;
+    private final AlphaVantageOverviewRepository alphaVantageOverviewRepository;
 
     @Transactional
-    public List<AlphaVantageOverview> fetchAndSave(List<String> requestedSymbols) {
+    public List<AlphaVantageOverview> refreshOverviews(List<String> requestedSymbols) {
         List<String> symbols = requestedSymbols.stream()
                 .map(symbol -> symbol.trim().toUpperCase(Locale.ROOT))
                 .distinct()
                 .toList();
-        List<AlphaVantageOverview> overviews = client.fetchOverviews(symbols);
+        List<AlphaVantageOverview> overviews = alphaVantageOverviewClient.fetchOverviews(symbols);
         Map<String, AlphaVantageOverview> existing = new LinkedHashMap<>();
-        repository.findAllBySymbolIn(symbols).forEach(overview -> existing.put(overview.getSymbol(), overview));
+        alphaVantageOverviewRepository.findAllBySymbolIn(symbols)
+                .forEach(overview -> existing.put(overview.getSymbol(), overview));
         for (AlphaVantageOverview overview : overviews) {
             AlphaVantageOverview stored = existing.get(overview.getSymbol());
             if (stored != null) {
                 overview.setId(stored.getId());
             }
         }
-        List<AlphaVantageOverview> saved = repository.saveAllAndFlush(overviews);
+        List<AlphaVantageOverview> saved = alphaVantageOverviewRepository.saveAllAndFlush(overviews);
         log.info("Saved {} Alpha Vantage overviews to PostgreSQL", saved.size());
         return saved;
     }

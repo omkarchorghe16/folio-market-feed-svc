@@ -8,11 +8,15 @@ The Folio Pro Angular app (`../personal-wealth-management-angular`) calls its `/
 
 ## Rules
 
-The project rules live in `.github/` and apply to Claude Code as well:
+Before any code change, use the `java-coding-standards` skill (`.claude/skills/java-coding-standards/SKILL.md`).
+It loads the project rules, which live in `.github/` and apply to Claude Code as well:
 
 - `.github/copilot-instructions.md` — repository rules, including the documentation/skill sync policy.
-- `.github/instructions/*.instructions.md` — coding standards, architecture, Spring Boot, logging.
+- `.github/instructions/*.instructions.md` — coding standards, naming and readability, architecture,
+  Spring Boot, logging.
 - `.github/skills/*/SKILL.md` — workflows for REST APIs, JPA, providers, scheduling/notifications, tests.
+
+When a rule changes, edit the `.github/` file so Claude Code and Copilot stay in sync.
 
 ## Commands
 

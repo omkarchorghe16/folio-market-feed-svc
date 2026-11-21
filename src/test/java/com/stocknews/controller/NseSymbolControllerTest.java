@@ -72,12 +72,12 @@ class NseSymbolControllerTest {
 
     @Test
     void syncReturnsCounts() throws Exception {
-        when(nseSymbolService.sync()).thenReturn(new NseSymbolService.SyncResult(2300, 250, Instant.parse("2026-11-22T00:30:00Z")));
+        when(nseSymbolService.refreshSymbolLists()).thenReturn(new NseSymbolService.SyncResult(2300, 250, Instant.parse("2026-11-22T00:30:00Z")));
 
         mockMvc.perform(post("/api/india/nse/sync"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.equities").value(2300))
                 .andExpect(jsonPath("$.etfs").value(250));
-        verify(nseSymbolService).sync();
+        verify(nseSymbolService).refreshSymbolLists();
     }
 }

@@ -46,7 +46,7 @@ public class DigestService {
     /**
      * Execute the full daily digest: fetch, deduplicate, format, and send.
      */
-    public void runDailyDigest() {
+    public void sendDailyDigest() {
         log.info("Starting daily digest job");
 
         // Fetch US market news

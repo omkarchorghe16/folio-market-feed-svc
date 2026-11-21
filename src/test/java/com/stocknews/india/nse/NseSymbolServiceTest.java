@@ -38,18 +38,18 @@ class NseSymbolServiceTest {
     void syncStoresBothCsvFilesAndReportsCounts() throws IOException {
         stubDownloads(NseSymbolFixtures.EQUITY_CSV, NseSymbolFixtures.ETF_CSV);
 
-        NseSymbolService.SyncResult result = service.sync();
+        NseSymbolService.SyncResult result = service.refreshSymbolLists();
 
         assertEquals(4, result.equities());
         assertEquals(2, result.etfs());
-        assertTrue(service.listsStored());
+        assertTrue(service.hasStoredSymbolLists());
         assertEquals(NseSymbolFixtures.ETF_CSV, Files.readString(directory.resolve("nse").resolve(NseSymbolService.ETF_FILE)));
     }
 
     @Test
     void searchRanksExactAndPrefixMatchesFirst() throws IOException {
         stubDownloads(NseSymbolFixtures.EQUITY_CSV, NseSymbolFixtures.ETF_CSV);
-        service.sync();
+        service.refreshSymbolLists();
 
         List<String> symbols = service.search("reli", null, null).stream().map(NseSymbol::symbol).toList();
 
@@ -61,7 +61,7 @@ class NseSymbolServiceTest {
     @Test
     void searchFiltersByTypeAndAppliesLimit() throws IOException {
         stubDownloads(NseSymbolFixtures.EQUITY_CSV, NseSymbolFixtures.ETF_CSV);
-        service.sync();
+        service.refreshSymbolLists();
 
         assertEquals(List.of("GOLDBEES", "NIFTYBEES"),
                 service.search(null, NseSymbolType.ETF, null).stream().map(NseSymbol::symbol).toList());
@@ -81,10 +81,10 @@ class NseSymbolServiceTest {
     @Test
     void failedDownloadKeepsPreviousFiles() throws IOException {
         stubDownloads(NseSymbolFixtures.EQUITY_CSV, NseSymbolFixtures.ETF_CSV);
-        service.sync();
-        when(client.download(NseSymbolType.EQUITY)).thenThrow(new IOException("HTTP 403"));
+        service.refreshSymbolLists();
+        when(client.fetchSymbolList(NseSymbolType.EQUITY)).thenThrow(new IOException("HTTP 403"));
 
-        ResponseStatusException exception = assertThrows(ResponseStatusException.class, service::sync);
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, service::refreshSymbolLists);
 
         assertEquals(HttpStatus.BAD_GATEWAY, exception.getStatusCode());
         assertEquals(6, service.search(null, null, null).size());
@@ -94,13 +94,13 @@ class NseSymbolServiceTest {
     void invalidDownloadIsRejectedWithoutWritingFiles() throws IOException {
         stubDownloads("<html>Access Denied</html>", NseSymbolFixtures.ETF_CSV);
 
-        assertThrows(ResponseStatusException.class, service::sync);
+        assertThrows(ResponseStatusException.class, service::refreshSymbolLists);
 
-        assertFalse(service.listsStored());
+        assertFalse(service.hasStoredSymbolLists());
     }
 
     private void stubDownloads(String equities, String etfs) throws IOException {
-        when(client.download(NseSymbolType.EQUITY)).thenReturn(equities);
-        when(client.download(NseSymbolType.ETF)).thenReturn(etfs);
+        when(client.fetchSymbolList(NseSymbolType.EQUITY)).thenReturn(equities);
+        when(client.fetchSymbolList(NseSymbolType.ETF)).thenReturn(etfs);
     }
 }

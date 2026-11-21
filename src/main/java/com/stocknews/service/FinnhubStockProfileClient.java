@@ -23,22 +23,22 @@ import java.util.List;
 @Slf4j
 public class FinnhubStockProfileClient {
     private final RestClient restClient;
-    private final AppProperties properties;
+    private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
-    private final FinnhubRequestRateLimiter rateLimiter;
+    private final FinnhubRateLimiter finnhubRateLimiter;
 
     public List<FinnhubStockProfile> fetchProfiles(List<String> symbols) {
-        String apiKey = properties.getApis().getFinnhubKey();
+        String apiKey = appProperties.getApis().getFinnhubKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Finnhub API key is not configured");
         }
 
         List<FinnhubStockProfile> profiles = new ArrayList<>();
         for (String symbol : symbols) {
-            rateLimiter.awaitNextCall();
+            finnhubRateLimiter.awaitNextCall();
             try {
                 String response = restClient.get()
-                        .uri(UriComponentsBuilder.fromUriString(properties.getApis().getFinnhubBaseUrl())
+                        .uri(UriComponentsBuilder.fromUriString(appProperties.getApis().getFinnhubBaseUrl())
                                 .path("/stock/profile2")
                                 .queryParam("symbol", symbol)
                                 .queryParam("token", apiKey)

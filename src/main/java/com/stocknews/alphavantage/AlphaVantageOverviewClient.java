@@ -23,10 +23,10 @@ import java.util.List;
 @Slf4j
 public class AlphaVantageOverviewClient {
     private final RestClient restClient;
-    private final AppProperties properties;
+    private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
     public List<AlphaVantageOverview> fetchOverviews(List<String> symbols) {
-        String apiKey = properties.getApis().getAlphaVantageKey();
+        String apiKey = appProperties.getApis().getAlphaVantageKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Alpha Vantage API key is not configured");
@@ -37,7 +37,7 @@ public class AlphaVantageOverviewClient {
             try {
                 // Temporarily disabled: AlphaVantageRateLimiter.reserveRequest().
                 String response = restClient.get()
-                        .uri(UriComponentsBuilder.fromUriString(properties.getApis().getAlphaVantageBaseUrl())
+                        .uri(UriComponentsBuilder.fromUriString(appProperties.getApis().getAlphaVantageBaseUrl())
                                 .queryParam("function", "OVERVIEW")
                                 .queryParam("symbol", symbol)
                                 .queryParam("apikey", apiKey)

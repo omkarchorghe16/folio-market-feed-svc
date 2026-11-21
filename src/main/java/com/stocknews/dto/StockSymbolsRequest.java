@@ -1,4 +1,4 @@
-package com.stocknews.service;
+package com.stocknews.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;

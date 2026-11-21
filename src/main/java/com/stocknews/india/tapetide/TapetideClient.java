@@ -40,7 +40,7 @@ public class TapetideClient {
     private static final String TOKEN_HELP = "Get a free token at https://tapetide.com/settings/tokens and set TAPETIDE_TOKEN";
 
     private final RestClient restClient;
-    private final TapetideProperties properties;
+    private final TapetideProperties tapetideProperties;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final AtomicLong requestIds = new AtomicLong();
@@ -55,13 +55,14 @@ public class TapetideClient {
 
     @Autowired
     public TapetideClient(@Qualifier("tapetideRestClient") RestClient restClient,
-                          TapetideProperties properties, ObjectMapper objectMapper) {
-        this(restClient, properties, objectMapper, Clock.systemUTC());
+                          TapetideProperties tapetideProperties, ObjectMapper objectMapper) {
+        this(restClient, tapetideProperties, objectMapper, Clock.systemUTC());
     }
 
-    TapetideClient(RestClient restClient, TapetideProperties properties, ObjectMapper objectMapper, Clock clock) {
+    TapetideClient(RestClient restClient, TapetideProperties tapetideProperties, ObjectMapper objectMapper,
+                   Clock clock) {
         this.restClient = restClient;
-        this.properties = properties;
+        this.tapetideProperties = tapetideProperties;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -117,7 +118,7 @@ public class TapetideClient {
         String token = accessToken();
         try {
             return restClient.post()
-                    .uri(properties.getBaseUrl() + "/mcp")
+                    .uri(tapetideProperties.getBaseUrl() + "/mcp")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(HttpHeaders.ACCEPT, "application/json, text/event-stream")
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -140,7 +141,7 @@ public class TapetideClient {
         if (accessTokenValid()) {
             return accessToken;
         }
-        String refreshToken = properties.getToken();
+        String refreshToken = tapetideProperties.getToken();
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Tapetide token is not configured. " + TOKEN_HELP);
@@ -152,7 +153,7 @@ public class TapetideClient {
         RawResponse response;
         try {
             response = restClient.post()
-                    .uri(properties.getBaseUrl() + "/token")
+                    .uri(tapetideProperties.getBaseUrl() + "/token")
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .body(form)
                     .exchange((req, res) -> new RawResponse(res.getStatusCode().value(), res.getHeaders(),

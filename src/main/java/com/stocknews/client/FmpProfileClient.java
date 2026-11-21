@@ -21,11 +21,11 @@ import java.math.BigDecimal;
 @Slf4j
 public class FmpProfileClient {
     private final RestClient restClient;
-    private final FmpProperties properties;
+    private final FmpProperties fmpProperties;
     private final ObjectMapper objectMapper;
 
     public FmpStockProfile fetchProfile(String symbol) {
-        String apiKey = properties.getApiKey();
+        String apiKey = fmpProperties.getApiKey();
         if (apiKey == null || apiKey.isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "FMP API key is not configured; set FMP_API_KEY");
@@ -33,7 +33,7 @@ public class FmpProfileClient {
 
         try {
             String response = restClient.get()
-                    .uri(UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+                    .uri(UriComponentsBuilder.fromUriString(fmpProperties.getBaseUrl())
                             .pathSegment("profile")
                             .queryParam("symbol", symbol)
                             .queryParam("apikey", apiKey)
@@ -69,10 +69,10 @@ public class FmpProfileClient {
         String symbol = profile.getSymbol();
         try {
             String response = restClient.get()
-                    .uri(UriComponentsBuilder.fromUriString(properties.getBaseUrl())
+                    .uri(UriComponentsBuilder.fromUriString(fmpProperties.getBaseUrl())
                             .pathSegment("ratios-ttm")
                             .queryParam("symbol", symbol)
-                            .queryParam("apikey", properties.getApiKey())
+                            .queryParam("apikey", fmpProperties.getApiKey())
                             .build()
                             .encode()
                             .toUri())

@@ -34,26 +34,26 @@ public class FmpProfileService {
     /** Each fetched symbol costs two FMP calls: profile + ratios-ttm (P/E, EPS). */
     static final int CALLS_PER_SYMBOL = 2;
 
-    private final FmpProfileClient client;
+    private final FmpProfileClient fmpProfileClient;
     private final FmpStockProfileRepository profileRepository;
     private final FmpApiCallRepository apiCallRepository;
-    private final FmpProperties properties;
+    private final FmpProperties fmpProperties;
     private final Clock clock;
 
     @Autowired
-    public FmpProfileService(FmpProfileClient client, FmpStockProfileRepository profileRepository,
-                             FmpApiCallRepository apiCallRepository, FmpProperties properties) {
-        this(client, profileRepository, apiCallRepository, properties,
-                Clock.system(ZoneId.of(properties.getProfileRefreshTimeZone())));
+    public FmpProfileService(FmpProfileClient fmpProfileClient, FmpStockProfileRepository profileRepository,
+                             FmpApiCallRepository apiCallRepository, FmpProperties fmpProperties) {
+        this(fmpProfileClient, profileRepository, apiCallRepository, fmpProperties,
+                Clock.system(ZoneId.of(fmpProperties.getProfileRefreshTimeZone())));
     }
 
     /** Uses {@code clock} to decide what "today" is and to stamp created/updated dates. */
-    public FmpProfileService(FmpProfileClient client, FmpStockProfileRepository profileRepository,
-                             FmpApiCallRepository apiCallRepository, FmpProperties properties, Clock clock) {
-        this.client = client;
+    public FmpProfileService(FmpProfileClient fmpProfileClient, FmpStockProfileRepository profileRepository,
+                             FmpApiCallRepository apiCallRepository, FmpProperties fmpProperties, Clock clock) {
+        this.fmpProfileClient = fmpProfileClient;
         this.profileRepository = profileRepository;
         this.apiCallRepository = apiCallRepository;
-        this.properties = properties;
+        this.fmpProperties = fmpProperties;
         this.clock = clock;
     }
 
@@ -113,16 +113,16 @@ public class FmpProfileService {
     }
 
     private void validateCanFetch(List<String> symbolsToFetch) {
-        if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
+        if (fmpProperties.getApiKey() == null || fmpProperties.getApiKey().isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "FMP API key is not configured; set FMP_API_KEY");
         }
-        if (properties.isUsExchangesOnly()
+        if (fmpProperties.isUsExchangesOnly()
                 && symbolsToFetch.stream().anyMatch(symbol -> symbol.endsWith(".NS") || symbol.endsWith(".BO"))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "FMP Basic profiles support US-exchange symbols only");
         }
-        int dailyRequestLimit = properties.getDailyRequestLimit();
+        int dailyRequestLimit = fmpProperties.getDailyRequestLimit();
         if (dailyRequestLimit < 1) {
             throw new IllegalStateException("FMP daily request limit must be greater than zero");
         }
@@ -135,9 +135,9 @@ public class FmpProfileService {
      */
     private FmpStockProfile fetchAndUpsert(String symbol, FmpStockProfile stored) {
         recordApiCall();
-        FmpStockProfile fetched = client.fetchProfile(symbol);
+        FmpStockProfile fetched = fmpProfileClient.fetchProfile(symbol);
         recordApiCall();
-        client.applyTtmRatios(fetched);
+        fmpProfileClient.applyTtmRatios(fetched);
 
         LocalDateTime now = LocalDateTime.now(clock);
         if (stored != null) {

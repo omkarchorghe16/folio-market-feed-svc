@@ -32,7 +32,7 @@ public class StockSymbolController {
             @ApiResponse(responseCode = "400", description = "Invalid sector ID or ticker list"),
             @ApiResponse(responseCode = "404", description = "Sector not found")
     })
-    public ResponseEntity<BulkStockResponse> create(@Valid @RequestBody BulkStockRequest request) {
+    public ResponseEntity<BulkStockResponse> createBulk(@Valid @RequestBody BulkStockRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(stockService.createBulk(request));
     }
 }

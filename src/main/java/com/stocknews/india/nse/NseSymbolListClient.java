@@ -14,18 +14,18 @@ import java.nio.charset.StandardCharsets;
 @Component
 public class NseSymbolListClient {
     private final RestClient restClient;
-    private final NseProperties properties;
+    private final NseProperties nseProperties;
 
-    public NseSymbolListClient(@Qualifier("nseRestClient") RestClient restClient, NseProperties properties) {
+    public NseSymbolListClient(@Qualifier("nseRestClient") RestClient restClient, NseProperties nseProperties) {
         this.restClient = restClient;
-        this.properties = properties;
+        this.nseProperties = nseProperties;
     }
 
-    public String download(NseSymbolType type) throws IOException {
-        String url = type == NseSymbolType.ETF ? properties.getEtfListUrl() : properties.getEquityListUrl();
+    public String fetchSymbolList(NseSymbolType type) throws IOException {
+        String url = type == NseSymbolType.ETF ? nseProperties.getEtfListUrl() : nseProperties.getEquityListUrl();
         try {
             byte[] body = restClient.get().uri(url)
-                    .header(HttpHeaders.USER_AGENT, properties.getUserAgent())
+                    .header(HttpHeaders.USER_AGENT, nseProperties.getUserAgent())
                     .header(HttpHeaders.ACCEPT, "text/csv,*/*")
                     .exchange((request, response) -> {
                         if (response.getStatusCode().isError()) {

@@ -70,7 +70,7 @@ class UpstoxMarketDataClientTest {
                             "ohlc":{"open":3190,"high":3210,"low":3180,"close":3195},"volume":1200000}}}
                         """, MediaType.APPLICATION_JSON));
 
-        List<UpstoxQuote> quotes = client.quotes(List.of("tcs", "NOSUCH", "RELIANCE"), "nse");
+        List<UpstoxQuote> quotes = client.fetchQuotes(List.of("tcs", "NOSUCH", "RELIANCE"), "nse");
 
         assertEquals(List.of("TCS", "RELIANCE"), quotes.stream().map(UpstoxQuote::symbol).toList());
         assertEquals(0, quotes.get(1).lastPrice().compareTo(new java.math.BigDecimal("1310.5")));
@@ -87,7 +87,7 @@ class UpstoxMarketDataClientTest {
                           ["2026-11-13T00:00:00+05:30",1300.0,1315.5,1298.0,1310.5,5000000,0]]}}
                         """, MediaType.APPLICATION_JSON));
 
-        List<UpstoxCandle> candles = client.candles("RELIANCE", "NSE", "days", 1,
+        List<UpstoxCandle> candles = client.fetchCandles("RELIANCE", "NSE", "days", 1,
                 LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 13));
 
         assertEquals(1, candles.size());
@@ -103,7 +103,7 @@ class UpstoxMarketDataClientTest {
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                () -> client.quotes(List.of("RELIANCE"), "NSE"));
+                () -> client.fetchQuotes(List.of("RELIANCE"), "NSE"));
 
         assertEquals(503, exception.getStatusCode().value());
         assertTrue(exception.getReason().contains("Analytics Token"));
@@ -112,7 +112,7 @@ class UpstoxMarketDataClientTest {
     @Test
     void rejectsUnknownCandleUnit() {
         ResponseStatusException exception = assertThrows(ResponseStatusException.class,
-                () -> client.candles("RELIANCE", "NSE", "seconds", 1, null, LocalDate.now()));
+                () -> client.fetchCandles("RELIANCE", "NSE", "seconds", 1, null, LocalDate.now()));
 
         assertEquals(400, exception.getStatusCode().value());
     }

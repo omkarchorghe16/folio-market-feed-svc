@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class NseSymbolSyncScheduler {
     private final NseSymbolService nseSymbolService;
-    private final NseProperties properties;
+    private final NseProperties nseProperties;
 
     @Scheduled(cron = "${nse.schedule.cron-expression:0 0 6 * * SUN}", zone = "${nse.schedule.timezone:Asia/Kolkata}")
     public void runWeeklySync() {
@@ -31,7 +31,7 @@ public class NseSymbolSyncScheduler {
 
     @EventListener(ApplicationReadyEvent.class)
     public void syncOnStartupIfMissing() {
-        if (properties.isSyncOnStartup() && !nseSymbolService.listsStored()) {
+        if (nseProperties.isSyncOnStartup() && !nseSymbolService.hasStoredSymbolLists()) {
             log.info("NSE symbol lists not found on disk; downloading them at startup");
             syncSafely();
         }
@@ -39,7 +39,7 @@ public class NseSymbolSyncScheduler {
 
     private void syncSafely() {
         try {
-            nseSymbolService.sync();
+            nseSymbolService.refreshSymbolLists();
         } catch (Exception e) {
             log.error("NSE symbol sync job failed:\n{}", ExceptionLog.stackTrace(e));
         }

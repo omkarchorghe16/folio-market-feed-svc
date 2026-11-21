@@ -1,11 +1,11 @@
 package com.stocknews.controller;
 
+import com.stocknews.dto.StockSymbolsRequest;
 import com.stocknews.model.FinnhubStockProfile;
 import com.stocknews.model.AlphaVantageOverview;
 import com.stocknews.model.YahooStockProfile;
 import com.stocknews.alphavantage.AlphaVantageOverviewService;
 import com.stocknews.service.FinnhubStockProfileService;
-import com.stocknews.service.StockSymbolsRequest;
 import com.stocknews.service.YahooStockProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +26,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Stock Profiles", description = "Fetch and store provider company profiles")
-public class StockProfileController {
+public class UsStockProfileController {
     private final FinnhubStockProfileService finnhubStockProfileService;
     private final YahooStockProfileService yahooStockProfileService;
     private final AlphaVantageOverviewService alphaVantageOverviewService;
@@ -39,18 +39,18 @@ public class StockProfileController {
             @ApiResponse(responseCode = "503", description = "Finnhub API key is not configured"),
             @ApiResponse(responseCode = "502", description = "Finnhub request failed")
     })
-    public List<FinnhubStockProfile> fetchFinnhubProfiles(@Valid @RequestBody StockSymbolsRequest request) {
+    public List<FinnhubStockProfile> refreshFinnhubProfiles(@Valid @RequestBody StockSymbolsRequest request) {
         log.info("Received Finnhub stock profile request for {} symbols", request.symbols().size());
-        List<FinnhubStockProfile> profiles = finnhubStockProfileService.fetchAndSave(request.symbols());
+        List<FinnhubStockProfile> profiles = finnhubStockProfileService.refreshProfiles(request.symbols());
         log.info("Returned {} Finnhub stock profiles", profiles.size());
         return profiles;
     }
 
     @PostMapping("/yahoo/profiles")
     @Operation(summary = "Fetch Yahoo Finance company profiles", description = "Fetches business summaries and profile details and stores them in PostgreSQL.")
-    public List<YahooStockProfile> fetchYahooProfiles(@Valid @RequestBody StockSymbolsRequest request) {
+    public List<YahooStockProfile> refreshYahooProfiles(@Valid @RequestBody StockSymbolsRequest request) {
         log.info("Received Yahoo Finance stock profile request for {} symbols", request.symbols().size());
-        List<YahooStockProfile> profiles = yahooStockProfileService.fetchAndSave(request.symbols());
+        List<YahooStockProfile> profiles = yahooStockProfileService.refreshProfiles(request.symbols());
         log.info("Returned {} Yahoo Finance stock profiles", profiles.size());
         return profiles;
     }
@@ -66,9 +66,9 @@ public class StockProfileController {
             @ApiResponse(responseCode = "503", description = "Alpha Vantage API key is not configured"),
             @ApiResponse(responseCode = "502", description = "Alpha Vantage request failed")
     })
-    public List<AlphaVantageOverview> fetchAlphaVantageOverviews(@Valid @RequestBody StockSymbolsRequest request) {
+    public List<AlphaVantageOverview> refreshAlphaVantageOverviews(@Valid @RequestBody StockSymbolsRequest request) {
         log.info("Received Alpha Vantage overview request for {} symbols", request.symbols().size());
-        List<AlphaVantageOverview> overviews = alphaVantageOverviewService.fetchAndSave(request.symbols());
+        List<AlphaVantageOverview> overviews = alphaVantageOverviewService.refreshOverviews(request.symbols());
         log.info("Returned {} Alpha Vantage overviews", overviews.size());
         return overviews;
     }

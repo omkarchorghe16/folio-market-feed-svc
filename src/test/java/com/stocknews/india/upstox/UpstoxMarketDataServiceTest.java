@@ -62,10 +62,10 @@ class UpstoxMarketDataServiceTest {
         existing.setSymbol("TCS");
         existing.setCreatedDate(NOW.minusDays(5));
         when(quoteRepository.findAllByExchangeAndSymbolIn("NSE", List.of("RELIANCE", "TCS"))).thenReturn(List.of(existing));
-        when(client.quotes(List.of("RELIANCE", "TCS"), "NSE")).thenReturn(List.of(quote("RELIANCE"), quote("TCS")));
+        when(client.fetchQuotes(List.of("RELIANCE", "TCS"), "NSE")).thenReturn(List.of(quote("RELIANCE"), quote("TCS")));
         when(quoteRepository.saveAndFlush(any(UpstoxStockQuote.class))).thenAnswer(call -> call.getArgument(0));
 
-        List<UpstoxStockQuote> result = service.quotes(List.of("reliance", "TCS", "bad sym!"), "nse");
+        List<UpstoxStockQuote> result = service.getQuotes(List.of("reliance", "TCS", "bad sym!"), "nse");
 
         assertEquals(List.of("RELIANCE", "TCS"), result.stream().map(UpstoxStockQuote::getSymbol).toList());
         assertEquals(NOW, result.get(0).getCreatedDate());
@@ -78,16 +78,16 @@ class UpstoxMarketDataServiceTest {
         UpstoxStockQuote saved = new UpstoxStockQuote();
         saved.setSymbol("RELIANCE");
         when(quoteRepository.findAllByExchangeAndSymbolIn("NSE", List.of("RELIANCE"))).thenReturn(List.of(saved));
-        when(client.quotes(anyList(), eq("NSE")))
+        when(client.fetchQuotes(anyList(), eq("NSE")))
                 .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "token expired"));
 
-        assertEquals(List.of(saved), service.quotes(List.of("RELIANCE"), "NSE"));
+        assertEquals(List.of(saved), service.getQuotes(List.of("RELIANCE"), "NSE"));
     }
 
     @Test
     void invalidExchangeIsLoggedAndReturnsEmpty() {
-        assertTrue(service.quotes(List.of("RELIANCE"), "NYSE").isEmpty());
-        verify(client, never()).quotes(anyList(), anyString());
+        assertTrue(service.getQuotes(List.of("RELIANCE"), "NYSE").isEmpty());
+        verify(client, never()).fetchQuotes(anyList(), anyString());
     }
 
     @Test
@@ -99,11 +99,11 @@ class UpstoxMarketDataServiceTest {
         existing.setCreatedDate(NOW.minusDays(1));
         when(candleRepository.findAllBySymbolAndExchangeAndUnitAndIntervalAndCandleTimeBetweenOrderByCandleTimeDesc(
                 eq("RELIANCE"), eq("NSE"), eq("days"), eq(1), any(), any())).thenReturn(List.of(existing));
-        when(client.candles("RELIANCE", "NSE", "days", 1, LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 13)))
+        when(client.fetchCandles("RELIANCE", "NSE", "days", 1, LocalDate.of(2026, 11, 10), LocalDate.of(2026, 11, 13)))
                 .thenReturn(List.of(candle("2026-11-13T00:00:00+05:30"), candle("2026-11-12T00:00:00+05:30")));
         when(candleRepository.saveAllAndFlush(anyList())).thenAnswer(call -> call.getArgument(0));
 
-        List<UpstoxStockCandle> result = service.candles("RELIANCE", "NSE", "days", 1, "2026-11-10", "2026-11-13");
+        List<UpstoxStockCandle> result = service.getCandles("RELIANCE", "NSE", "days", 1, "2026-11-10", "2026-11-13");
 
         assertEquals(2, result.size());
         assertSame(existing, result.get(1));
@@ -114,20 +114,20 @@ class UpstoxMarketDataServiceTest {
 
     @Test
     void badDateOrUnitIsLoggedAndReturnsEmpty() {
-        assertTrue(service.candles("RELIANCE", "NSE", "days", 1, "13-11-2026", null).isEmpty());
-        assertTrue(service.candles("RELIANCE", "NSE", "seconds", 1, null, null).isEmpty());
-        assertTrue(service.candles("RELIANCE", "NSE", "days", 1, "2026-11-13", "2026-11-01").isEmpty());
-        verify(client, never()).candles(anyString(), anyString(), anyString(), anyInt(), any(), any());
+        assertTrue(service.getCandles("RELIANCE", "NSE", "days", 1, "13-11-2026", null).isEmpty());
+        assertTrue(service.getCandles("RELIANCE", "NSE", "seconds", 1, null, null).isEmpty());
+        assertTrue(service.getCandles("RELIANCE", "NSE", "days", 1, "2026-11-13", "2026-11-01").isEmpty());
+        verify(client, never()).fetchCandles(anyString(), anyString(), anyString(), anyInt(), any(), any());
     }
 
     @Test
     void unknownSymbolFromUpstoxIsLoggedAndReturnsSavedCandles() {
         when(candleRepository.findAllBySymbolAndExchangeAndUnitAndIntervalAndCandleTimeBetweenOrderByCandleTimeDesc(
                 anyString(), anyString(), anyString(), anyInt(), any(), any())).thenReturn(List.of());
-        when(client.candles(eq("NOSUCH"), eq("NSE"), eq("days"), eq(1), any(), any()))
+        when(client.fetchCandles(eq("NOSUCH"), eq("NSE"), eq("days"), eq(1), any(), any()))
                 .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "NOSUCH is not an NSE equity symbol"));
 
-        assertTrue(service.candles("NOSUCH", "NSE", "days", 1, null, null).isEmpty());
+        assertTrue(service.getCandles("NOSUCH", "NSE", "days", 1, null, null).isEmpty());
         verify(candleRepository, never()).saveAllAndFlush(anyList());
     }
 

@@ -15,23 +15,24 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 public class FinnhubStockProfileService {
-    private final FinnhubStockProfileClient client;
-    private final FinnhubStockProfileRepository repository;
+    private final FinnhubStockProfileClient finnhubStockProfileClient;
+    private final FinnhubStockProfileRepository finnhubStockProfileRepository;
 
     @Transactional
-    public List<FinnhubStockProfile> fetchAndSave(List<String> requestedSymbols) {
+    public List<FinnhubStockProfile> refreshProfiles(List<String> requestedSymbols) {
         List<String> symbols = StockSymbolNormalizer.normalize(requestedSymbols);
         log.debug("Fetching Finnhub profiles for {} unique symbols", symbols.size());
-        List<FinnhubStockProfile> profiles = client.fetchProfiles(symbols);
+        List<FinnhubStockProfile> profiles = finnhubStockProfileClient.fetchProfiles(symbols);
         Map<String, FinnhubStockProfile> existing = new LinkedHashMap<>();
-        repository.findAllBySymbolIn(symbols).forEach(profile -> existing.put(profile.getSymbol(), profile));
+        finnhubStockProfileRepository.findAllBySymbolIn(symbols)
+                .forEach(profile -> existing.put(profile.getSymbol(), profile));
         profiles.forEach(profile -> {
             FinnhubStockProfile stored = existing.get(profile.getSymbol());
             if (stored != null) {
                 profile.setId(stored.getId());
             }
         });
-        List<FinnhubStockProfile> saved = repository.saveAll(profiles);
+        List<FinnhubStockProfile> saved = finnhubStockProfileRepository.saveAll(profiles);
         log.info("Saved {} Finnhub stock profiles to PostgreSQL", saved.size());
         return saved;
     }

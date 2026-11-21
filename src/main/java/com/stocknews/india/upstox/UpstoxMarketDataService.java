@@ -39,27 +39,28 @@ import java.util.stream.Collectors;
 public class UpstoxMarketDataService {
     private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
-    private final UpstoxMarketDataClient client;
+    private final UpstoxMarketDataClient upstoxMarketDataClient;
     private final UpstoxStockQuoteRepository quoteRepository;
     private final UpstoxStockCandleRepository candleRepository;
     private final Clock clock;
 
     @Autowired
-    public UpstoxMarketDataService(UpstoxMarketDataClient client, UpstoxStockQuoteRepository quoteRepository,
+    public UpstoxMarketDataService(UpstoxMarketDataClient upstoxMarketDataClient,
+                                   UpstoxStockQuoteRepository quoteRepository,
                                    UpstoxStockCandleRepository candleRepository) {
-        this(client, quoteRepository, candleRepository, Clock.systemDefaultZone());
+        this(upstoxMarketDataClient, quoteRepository, candleRepository, Clock.systemDefaultZone());
     }
 
-    UpstoxMarketDataService(UpstoxMarketDataClient client, UpstoxStockQuoteRepository quoteRepository,
+    UpstoxMarketDataService(UpstoxMarketDataClient upstoxMarketDataClient, UpstoxStockQuoteRepository quoteRepository,
                             UpstoxStockCandleRepository candleRepository, Clock clock) {
-        this.client = client;
+        this.upstoxMarketDataClient = upstoxMarketDataClient;
         this.quoteRepository = quoteRepository;
         this.candleRepository = candleRepository;
         this.clock = clock;
     }
 
     /** Live quotes in request order; symbols that cannot be quoted are logged and left out. */
-    public List<UpstoxStockQuote> quotes(List<String> rawSymbols, String rawExchange) {
+    public List<UpstoxStockQuote> getQuotes(List<String> rawSymbols, String rawExchange) {
         Optional<String> exchange = exchange(rawExchange, "Upstox quotes");
         List<String> symbols = rawSymbols == null ? List.of() : rawSymbols.stream()
                 .map(raw -> IndiaSymbols.normalize(raw, "Upstox quote"))
@@ -75,7 +76,7 @@ public class UpstoxMarketDataService {
                 .stream().collect(Collectors.toMap(UpstoxStockQuote::getSymbol, Function.identity(), (a, b) -> a, HashMap::new));
         try {
             LocalDateTime now = LocalDateTime.now(clock);
-            for (UpstoxQuote quote : client.quotes(symbols, exchange.get())) {
+            for (UpstoxQuote quote : upstoxMarketDataClient.fetchQuotes(symbols, exchange.get())) {
                 UpstoxStockQuote row = saved.getOrDefault(quote.symbol(), new UpstoxStockQuote());
                 boolean created = row.getId() == null;
                 copy(quote, row);
@@ -98,8 +99,8 @@ public class UpstoxMarketDataService {
      * @param fromDate {@code yyyy-MM-dd}; defaults to one month before {@code toDate}
      * @param toDate   {@code yyyy-MM-dd}; defaults to today in IST
      */
-    public List<UpstoxStockCandle> candles(String rawSymbol, String rawExchange, String rawUnit, Integer rawInterval,
-                                           String fromDate, String toDate) {
+    public List<UpstoxStockCandle> getCandles(String rawSymbol, String rawExchange, String rawUnit, Integer rawInterval,
+                                              String fromDate, String toDate) {
         Optional<String> symbol = IndiaSymbols.normalize(rawSymbol, "Upstox candles");
         Optional<String> exchange = exchange(rawExchange, "Upstox candles");
         String unit = rawUnit == null || rawUnit.isBlank() ? "days" : rawUnit.trim().toLowerCase(Locale.ROOT);
@@ -135,7 +136,7 @@ public class UpstoxMarketDataService {
 
         List<UpstoxCandle> fetched;
         try {
-            fetched = client.candles(symbol.get(), exchange.get(), unit, interval, start, end);
+            fetched = upstoxMarketDataClient.fetchCandles(symbol.get(), exchange.get(), unit, interval, start, end);
         } catch (ResponseStatusException exception) {
             log.error("Upstox candles failed for {}:{} {} x{} {}..{}: status={}, reason={}; returning {} saved candles",
                     exchange.get(), symbol.get(), unit, interval, start, end, exception.getStatusCode().value(),

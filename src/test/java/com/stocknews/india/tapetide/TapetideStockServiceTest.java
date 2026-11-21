@@ -65,7 +65,7 @@ class TapetideStockServiceTest {
                  "pe_ttm":22.08,"pb":1.92,"high_52w":1611.8,"low_52w":1152.2,"volume":13756247}}"""));
         when(quoteRepository.saveAndFlush(any(TapetideStockQuote.class))).thenAnswer(call -> call.getArgument(0));
 
-        TapetideStockQuote quote = service.quote(" reliance.ns ").orElseThrow();
+        TapetideStockQuote quote = service.getQuote(" reliance.ns ").orElseThrow();
 
         assertEquals("RELIANCE", quote.getSymbol());
         assertEquals(0, quote.getPeTtm().compareTo(new BigDecimal("22.08")));
@@ -79,7 +79,7 @@ class TapetideStockServiceTest {
         TapetideStockQuote saved = quote("TCS", NOW.minusMinutes(10));
         when(quoteRepository.findBySymbol("TCS")).thenReturn(Optional.of(saved));
 
-        assertSame(saved, service.quote("TCS").orElseThrow());
+        assertSame(saved, service.getQuote("TCS").orElseThrow());
         verify(client, never()).callTool(anyString(), anyMap());
     }
 
@@ -88,7 +88,7 @@ class TapetideStockServiceTest {
         when(quoteRepository.findBySymbol("NOSUCH")).thenReturn(Optional.empty());
         when(client.callTool(eq("get_stock_quote"), anyMap())).thenReturn(json("{\"data\":{\"found\":false}}"));
 
-        assertTrue(service.quote("NOSUCH").isEmpty());
+        assertTrue(service.getQuote("NOSUCH").isEmpty());
         verify(quoteRepository, never()).saveAndFlush(any());
     }
 
@@ -99,12 +99,12 @@ class TapetideStockServiceTest {
         when(client.callTool(eq("get_stock_quote"), anyMap()))
                 .thenThrow(new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "rate limit"));
 
-        assertSame(stale, service.quote("INFY").orElseThrow());
+        assertSame(stale, service.getQuote("INFY").orElseThrow());
     }
 
     @Test
     void invalidSymbolIsLoggedAndNeverSentToTapetide() {
-        assertTrue(service.quote("RELI ANCE!!").isEmpty());
+        assertTrue(service.getQuote("RELI ANCE!!").isEmpty());
         verify(client, never()).callTool(anyString(), anyMap());
     }
 
@@ -120,7 +120,7 @@ class TapetideStockServiceTest {
                          {"found":true,"requested":"TCS","symbol":"TCS","price":2407.5}]}"""));
         when(quoteRepository.saveAndFlush(any(TapetideStockQuote.class))).thenAnswer(call -> call.getArgument(0));
 
-        List<TapetideStockQuote> quotes = service.quotes(List.of("RELIANCE", "NOSUCH", "TCS", "bad symbol!"));
+        List<TapetideStockQuote> quotes = service.getQuotes(List.of("RELIANCE", "NOSUCH", "TCS", "bad symbol!"));
 
         assertEquals(List.of("RELIANCE", "TCS"), quotes.stream().map(TapetideStockQuote::getSymbol).toList());
         assertEquals(0, quotes.get(0).getPrice().compareTo(new BigDecimal("1340.0")));
@@ -135,7 +135,7 @@ class TapetideStockServiceTest {
         when(client.callTool(eq("get_financials"), anyMap())).thenReturn(json("{\"data\":{\"ratios\":[{\"roe\":50}]}}"));
         when(datasetRepository.saveAndFlush(any(TapetideStockDataset.class))).thenAnswer(call -> call.getArgument(0));
 
-        TapetideStockDataset row = service.financials("tcs", "RATIOS", 4).orElseThrow();
+        TapetideStockDataset row = service.getFinancials("tcs", "RATIOS", 4).orElseThrow();
 
         assertEquals("financials", row.getDataset());
         assertEquals("periods=4;section=ratios", row.getRequestParams());
@@ -149,7 +149,7 @@ class TapetideStockServiceTest {
                 .thenReturn(Optional.empty());
         when(client.callTool(eq("get_forecasts"), anyMap())).thenReturn(json("{\"data\":[],\"meta\":{}}"));
 
-        assertTrue(service.forecasts("NOSUCH").isEmpty());
+        assertTrue(service.getForecasts("NOSUCH").isEmpty());
         verify(datasetRepository, never()).saveAndFlush(any());
     }
 

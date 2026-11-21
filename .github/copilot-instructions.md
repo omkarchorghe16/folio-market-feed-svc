@@ -3,6 +3,7 @@
 For every code change, follow the standards in:
 
 - `.github/instructions/coding-standards.instructions.md`
+- `.github/instructions/naming-and-readability.instructions.md`
 - `.github/instructions/architecture.instructions.md`
 - `.github/instructions/spring-boot.instructions.md`
 - `.github/instructions/logging.instructions.md`

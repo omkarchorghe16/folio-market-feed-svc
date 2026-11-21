@@ -39,7 +39,7 @@ class NseSymbolListClientTest {
                 .andExpect(header(HttpHeaders.USER_AGENT, properties.getUserAgent()))
                 .andRespond(withSuccess(NseSymbolFixtures.EQUITY_CSV, MediaType.TEXT_PLAIN));
 
-        assertEquals(NseSymbolFixtures.EQUITY_CSV, client.download(NseSymbolType.EQUITY));
+        assertEquals(NseSymbolFixtures.EQUITY_CSV, client.fetchSymbolList(NseSymbolType.EQUITY));
         server.verify();
     }
 
@@ -48,7 +48,7 @@ class NseSymbolListClientTest {
         server.expect(requestTo("https://nse.test/eq_etfseclist.csv"))
                 .andRespond(withSuccess(NseSymbolFixtures.ETF_CSV, MediaType.TEXT_PLAIN));
 
-        assertEquals(NseSymbolFixtures.ETF_CSV, client.download(NseSymbolType.ETF));
+        assertEquals(NseSymbolFixtures.ETF_CSV, client.fetchSymbolList(NseSymbolType.ETF));
     }
 
     @Test
@@ -56,7 +56,7 @@ class NseSymbolListClientTest {
         server.expect(requestTo("https://nse.test/EQUITY_L.csv")).andRespond(withStatus(HttpStatus.FORBIDDEN));
         server.expect(requestTo("https://nse.test/eq_etfseclist.csv")).andRespond(withSuccess("", MediaType.TEXT_PLAIN));
 
-        assertThrows(IOException.class, () -> client.download(NseSymbolType.EQUITY));
-        assertThrows(IOException.class, () -> client.download(NseSymbolType.ETF));
+        assertThrows(IOException.class, () -> client.fetchSymbolList(NseSymbolType.EQUITY));
+        assertThrows(IOException.class, () -> client.fetchSymbolList(NseSymbolType.ETF));
     }
 }

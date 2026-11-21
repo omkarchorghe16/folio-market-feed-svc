@@ -23,7 +23,7 @@ import java.util.stream.Stream;
 
 /**
  * Keeps NSE's equity and ETF symbol lists as CSV files on disk and searches them for type-ahead
- * dropdowns. {@link #sync()} replaces both files only after both downloads parse successfully, so a
+ * dropdowns. {@link #refreshSymbolLists()} replaces both files only after both downloads parse successfully, so a
  * failed or partial download never removes the previous lists. Searches read the CSV files and keep
  * the parsed rows in memory until a file changes on disk.
  */
@@ -39,24 +39,24 @@ public class NseSymbolService {
     private record Snapshot(FileTime equityModified, FileTime etfModified, List<NseSymbol> symbols) {
     }
 
-    private final NseSymbolListClient client;
-    private final Path directory;
+    private final NseSymbolListClient nseSymbolListClient;
+    private final Path storageDirectory;
     private volatile Snapshot snapshot;
 
-    public NseSymbolService(NseSymbolListClient client, NseProperties properties) {
-        this.client = client;
-        this.directory = Path.of(properties.getStorageDirectory());
+    public NseSymbolService(NseSymbolListClient nseSymbolListClient, NseProperties nseProperties) {
+        this.nseSymbolListClient = nseSymbolListClient;
+        this.storageDirectory = Path.of(nseProperties.getStorageDirectory());
     }
 
     /** Downloads both NSE lists and atomically replaces the stored CSV files. */
-    public synchronized SyncResult sync() {
+    public synchronized SyncResult refreshSymbolLists() {
         String equityCsv;
         String etfCsv;
         int equities;
         int etfs;
         try {
-            equityCsv = client.download(NseSymbolType.EQUITY);
-            etfCsv = client.download(NseSymbolType.ETF);
+            equityCsv = nseSymbolListClient.fetchSymbolList(NseSymbolType.EQUITY);
+            etfCsv = nseSymbolListClient.fetchSymbolList(NseSymbolType.ETF);
             equities = NseSymbolCsvParser.parse(equityCsv, NseSymbolType.EQUITY).size();
             etfs = NseSymbolCsvParser.parse(etfCsv, NseSymbolType.ETF).size();
         } catch (IOException | IllegalArgumentException exception) {
@@ -65,21 +65,22 @@ public class NseSymbolService {
                     "Could not download the NSE symbol lists; previous lists were kept", exception);
         }
         try {
-            Files.createDirectories(directory);
+            Files.createDirectories(storageDirectory);
             write(EQUITY_FILE, equityCsv);
             write(ETF_FILE, etfCsv);
         } catch (IOException exception) {
-            log.error("NSE symbol sync could not write to {}: {}", directory, exception.getMessage());
+            log.error("NSE symbol sync could not write to {}: {}", storageDirectory, exception.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Could not store the NSE symbol lists", exception);
         }
         snapshot = null;
-        log.info("NSE symbol sync saved {} equities and {} ETFs to {}", equities, etfs, directory);
+        log.info("NSE symbol sync saved {} equities and {} ETFs to {}", equities, etfs, storageDirectory);
         return new SyncResult(equities, etfs, Instant.now());
     }
 
-    public boolean listsStored() {
-        return Files.isRegularFile(directory.resolve(EQUITY_FILE)) && Files.isRegularFile(directory.resolve(ETF_FILE));
+    public boolean hasStoredSymbolLists() {
+        return Files.isRegularFile(storageDirectory.resolve(EQUITY_FILE))
+                && Files.isRegularFile(storageDirectory.resolve(ETF_FILE));
     }
 
     /**
@@ -122,9 +123,9 @@ public class NseSymbolService {
     }
 
     private List<NseSymbol> symbols() {
-        Path equityPath = directory.resolve(EQUITY_FILE);
-        Path etfPath = directory.resolve(ETF_FILE);
-        if (!listsStored()) {
+        Path equityPath = storageDirectory.resolve(EQUITY_FILE);
+        Path etfPath = storageDirectory.resolve(ETF_FILE);
+        if (!hasStoredSymbolLists()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "NSE symbol lists are not downloaded yet; call POST /api/india/nse/sync");
         }
@@ -140,10 +141,10 @@ public class NseSymbolService {
                     NseSymbolCsvParser.parse(Files.readString(equityPath, StandardCharsets.UTF_8), NseSymbolType.EQUITY),
                     NseSymbolCsvParser.parse(Files.readString(etfPath, StandardCharsets.UTF_8), NseSymbolType.ETF));
             snapshot = new Snapshot(equityModified, etfModified, loaded);
-            log.info("Loaded {} NSE symbols from {}", loaded.size(), directory);
+            log.info("Loaded {} NSE symbols from {}", loaded.size(), storageDirectory);
             return loaded;
         } catch (IOException | IllegalArgumentException exception) {
-            log.error("Could not read the stored NSE symbol lists in {}: {}", directory, exception.getMessage());
+            log.error("Could not read the stored NSE symbol lists in {}: {}", storageDirectory, exception.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Stored NSE symbol lists could not be read; call POST /api/india/nse/sync", exception);
         }
@@ -158,8 +159,8 @@ public class NseSymbolService {
     }
 
     private void write(String fileName, String csv) throws IOException {
-        Path target = directory.resolve(fileName);
-        Path temp = Files.createTempFile(directory, fileName, ".tmp");
+        Path target = storageDirectory.resolve(fileName);
+        Path temp = Files.createTempFile(storageDirectory, fileName, ".tmp");
         try {
             Files.writeString(temp, csv, StandardCharsets.UTF_8);
             Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);

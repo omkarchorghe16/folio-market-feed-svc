@@ -40,33 +40,34 @@ public class TapetideStockService {
     /** Tapetide's get_batch_quotes accepts at most 20 symbols per call. */
     static final int MAX_BATCH = 20;
 
-    private final TapetideClient client;
+    private final TapetideClient tapetideClient;
     private final TapetideStockQuoteRepository quoteRepository;
     private final TapetideStockDatasetRepository datasetRepository;
-    private final TapetideProperties properties;
+    private final TapetideProperties tapetideProperties;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
     @Autowired
-    public TapetideStockService(TapetideClient client, TapetideStockQuoteRepository quoteRepository,
-                                TapetideStockDatasetRepository datasetRepository, TapetideProperties properties,
+    public TapetideStockService(TapetideClient tapetideClient, TapetideStockQuoteRepository quoteRepository,
+                                TapetideStockDatasetRepository datasetRepository, TapetideProperties tapetideProperties,
                                 ObjectMapper objectMapper) {
-        this(client, quoteRepository, datasetRepository, properties, objectMapper, Clock.systemDefaultZone());
+        this(tapetideClient, quoteRepository, datasetRepository, tapetideProperties, objectMapper,
+                Clock.systemDefaultZone());
     }
 
-    TapetideStockService(TapetideClient client, TapetideStockQuoteRepository quoteRepository,
-                         TapetideStockDatasetRepository datasetRepository, TapetideProperties properties,
+    TapetideStockService(TapetideClient tapetideClient, TapetideStockQuoteRepository quoteRepository,
+                         TapetideStockDatasetRepository datasetRepository, TapetideProperties tapetideProperties,
                          ObjectMapper objectMapper, Clock clock) {
-        this.client = client;
+        this.tapetideClient = tapetideClient;
         this.quoteRepository = quoteRepository;
         this.datasetRepository = datasetRepository;
-        this.properties = properties;
+        this.tapetideProperties = tapetideProperties;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
 
     /** Symbol search is not stock data, so it is not saved. Returns an empty array on any problem. */
-    public JsonNode search(String query, Integer limit) {
+    public JsonNode searchSymbols(String query, Integer limit) {
         if (query == null || query.isBlank()) {
             log.error("Tapetide search skipped: query is empty");
             return objectMapper.createArrayNode();
@@ -77,7 +78,7 @@ public class TapetideStockService {
             args.put("limit", limit);
         }
         try {
-            return client.callTool("search_stocks", args);
+            return tapetideClient.callTool("search_stocks", args);
         } catch (ResponseStatusException exception) {
             log.error("Tapetide search failed for query '{}': status={}, reason={}",
                     query, exception.getStatusCode().value(), exception.getReason());
@@ -88,18 +89,18 @@ public class TapetideStockService {
     // ---------------------------------------------------------------- quotes
 
     /** Latest quote (price, P/E, P/B, 52-week range). Empty if the symbol is invalid and nothing is saved. */
-    public Optional<TapetideStockQuote> quote(String rawSymbol) {
+    public Optional<TapetideStockQuote> getQuote(String rawSymbol) {
         Optional<String> symbol = IndiaSymbols.normalize(rawSymbol, "Tapetide quote");
         if (symbol.isEmpty()) {
             return Optional.empty();
         }
         Optional<TapetideStockQuote> saved = quoteRepository.findBySymbol(symbol.get());
-        if (saved.isPresent() && isFresh(saved.get(), properties.getQuoteRefreshMinutes())) {
+        if (saved.isPresent() && isFresh(saved.get(), tapetideProperties.getQuoteRefreshMinutes())) {
             log.info("Tapetide quote for {} served from PostgreSQL (updated {})", symbol.get(), saved.get().getUpdatedDate());
             return saved;
         }
         try {
-            JsonNode data = client.callTool("get_stock_quote", Map.of("symbol", symbol.get())).path("data");
+            JsonNode data = tapetideClient.callTool("get_stock_quote", Map.of("symbol", symbol.get())).path("data");
             if (!isFound(data)) {
                 log.error("Tapetide quote skipped for {}: symbol not found (requested={}, response={})",
                         symbol.get(), rawSymbol, abbreviate(data));
@@ -116,7 +117,7 @@ public class TapetideStockService {
      * Quotes for many symbols, 20 per Tapetide call, in request order. Invalid or unknown symbols are
      * logged and left out; a failed batch falls back to saved rows; a rate limit stops further calls.
      */
-    public List<TapetideStockQuote> quotes(List<String> rawSymbols) {
+    public List<TapetideStockQuote> getQuotes(List<String> rawSymbols) {
         List<String> symbols = rawSymbols == null ? List.of() : rawSymbols.stream()
                 .map(raw -> IndiaSymbols.normalize(raw, "Tapetide quotes"))
                 .flatMap(Optional::stream)
@@ -131,7 +132,7 @@ public class TapetideStockService {
                 .collect(Collectors.toMap(TapetideStockQuote::getSymbol, quote -> quote, (a, b) -> a, HashMap::new));
         List<String> toFetch = symbols.stream()
                 .filter(symbol -> !bySymbol.containsKey(symbol)
-                        || !isFresh(bySymbol.get(symbol), properties.getQuoteRefreshMinutes()))
+                        || !isFresh(bySymbol.get(symbol), tapetideProperties.getQuoteRefreshMinutes()))
                 .toList();
         log.info("Tapetide quotes: {} requested, {} served from PostgreSQL, {} to fetch",
                 symbols.size(), symbols.size() - toFetch.size(), toFetch.size());
@@ -139,7 +140,7 @@ public class TapetideStockService {
         for (int start = 0; start < toFetch.size(); start += MAX_BATCH) {
             List<String> chunk = toFetch.subList(start, Math.min(start + MAX_BATCH, toFetch.size()));
             try {
-                JsonNode items = client.callTool("get_batch_quotes", Map.of("symbols", chunk)).path("data");
+                JsonNode items = tapetideClient.callTool("get_batch_quotes", Map.of("symbols", chunk)).path("data");
                 Map<String, JsonNode> returned = new HashMap<>();
                 for (JsonNode item : items) {
                     String key = item.path("requested").asText(item.path("symbol").asText("")).toUpperCase();
@@ -197,7 +198,7 @@ public class TapetideStockService {
     // ------------------------------------------------------------- datasets
 
     /** Company overview with fundamentals; {@code include} may contain technicals, ratings, peers. */
-    public Optional<TapetideStockDataset> profile(String symbol, List<String> include) {
+    public Optional<TapetideStockDataset> getProfile(String symbol, List<String> include) {
         Map<String, Object> args = new LinkedHashMap<>();
         if (include != null && !include.isEmpty()) {
             args.put("include", include.stream().map(String::trim).map(String::toLowerCase).sorted().toList());
@@ -206,7 +207,7 @@ public class TapetideStockService {
     }
 
     /** {@code section}: quarterly, profit_loss, balance_sheet, cash_flow, ratios (null = all). */
-    public Optional<TapetideStockDataset> financials(String symbol, String section, Integer periods) {
+    public Optional<TapetideStockDataset> getFinancials(String symbol, String section, Integer periods) {
         Map<String, Object> args = new LinkedHashMap<>();
         if (section != null && !section.isBlank()) {
             args.put("section", section.trim().toLowerCase());
@@ -218,7 +219,7 @@ public class TapetideStockService {
     }
 
     /** {@code type}: quarterly or annual (null = all). */
-    public Optional<TapetideStockDataset> shareholding(String symbol, String type) {
+    public Optional<TapetideStockDataset> getShareholding(String symbol, String type) {
         Map<String, Object> args = new LinkedHashMap<>();
         if (type != null && !type.isBlank()) {
             args.put("type", type.trim().toLowerCase());
@@ -227,12 +228,12 @@ public class TapetideStockService {
     }
 
     /** Analyst estimates (EPS, revenue, EBITDA, net income, ROA, ROE, price target) against actuals. */
-    public Optional<TapetideStockDataset> forecasts(String symbol) {
+    public Optional<TapetideStockDataset> getForecasts(String symbol) {
         return dataset("forecasts", "get_forecasts", symbol, Map.of());
     }
 
     /** Daily or weekly OHLCV with delivery %; {@code days} max 2000. */
-    public Optional<TapetideStockDataset> priceHistory(String symbol, Integer days, String interval) {
+    public Optional<TapetideStockDataset> getPriceHistory(String symbol, Integer days, String interval) {
         Map<String, Object> args = new LinkedHashMap<>();
         if (days != null) {
             args.put("days", days);
@@ -257,7 +258,7 @@ public class TapetideStockService {
 
         Optional<TapetideStockDataset> saved =
                 datasetRepository.findBySymbolAndDatasetAndRequestParams(symbol, dataset, requestParams);
-        if (saved.isPresent() && isFresh(saved.get(), properties.getDataRefreshMinutes())) {
+        if (saved.isPresent() && isFresh(saved.get(), tapetideProperties.getDataRefreshMinutes())) {
             log.info("Tapetide {} for {} [{}] served from PostgreSQL (updated {})",
                     dataset, symbol, requestParams, saved.get().getUpdatedDate());
             return saved;
@@ -267,7 +268,7 @@ public class TapetideStockService {
         args.put("symbol", symbol);
         args.putAll(options);
         try {
-            JsonNode result = client.callTool(tool, args);
+            JsonNode result = tapetideClient.callTool(tool, args);
             JsonNode data = result.path("data");
             if (!hasData(data)) {
                 log.error("Tapetide {} skipped for {} [{}]: no data returned (requested={}, response={})",

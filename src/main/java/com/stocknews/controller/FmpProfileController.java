@@ -1,8 +1,8 @@
 package com.stocknews.controller;
 
+import com.stocknews.dto.StockSymbolsRequest;
 import com.stocknews.model.FmpStockProfile;
 import com.stocknews.service.FmpProfileService;
-import com.stocknews.service.StockSymbolsRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;

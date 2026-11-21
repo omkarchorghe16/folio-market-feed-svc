@@ -23,10 +23,10 @@ public class DigestScheduler {
      * Configure via: app.schedule.cron-expression
      */
     @Scheduled(cron = "${app.schedule.cron-expression:0 0 9 * * MON-FRI}", zone = "${app.schedule.timezone:America/Chicago}")
-    public void runScheduledDigest() {
+    public void sendScheduledDigest() {
         log.info("Executing scheduled daily digest");
         try {
-            digestService.runDailyDigest();
+            digestService.sendDailyDigest();
         } catch (Exception e) {
             log.error("Scheduled digest job failed:\n{}", ExceptionLog.stackTrace(e));
         }

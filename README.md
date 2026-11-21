@@ -59,14 +59,14 @@ com/stocknews/
 │   ├── TelegramNotifier.java       # Telegram Bot API
 │   └── WhatsAppNotifier.java       # Twilio WhatsApp API
 ├── controller/
-│   ├── DigestTriggerController.java
+│   ├── DigestController.java        # /api/digest/* (on-demand daily digest)
 │   ├── FmpProfileController.java    # /api/fmp/profiles
 │   ├── IndiaStockController.java    # /api/india/tapetide/*, /api/india/upstox/*
 │   ├── NseSymbolController.java     # /api/india/nse/* (stock + ETF ticker search)
 │   ├── SectorController.java
 │   ├── StockController.java
-│   ├── StockProfileController.java  # Finnhub / Yahoo / Alpha Vantage profiles
-│   └── StockSymbolController.java
+│   ├── StockSymbolController.java
+│   └── UsStockProfileController.java # Finnhub / Yahoo / Alpha Vantage profiles
 ├── india/
 │   ├── IndiaSymbols.java            # NSE symbol normalization
 │   ├── nse/                         # NSE symbol-list CSV client, parser + search service
@@ -840,7 +840,7 @@ mvn test
 
 - **Integration Tests**:
   - `StockNewsApplicationTest`: Spring context loads successfully
-  - `DigestTriggerControllerTest`: REST endpoints respond correctly
+  - `DigestControllerTest`: REST endpoints respond correctly
 
 ## Logging
 

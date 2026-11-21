@@ -40,7 +40,7 @@ public class NseSymbolController {
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Matching symbols"),
             @ApiResponse(responseCode = "400", description = "Invalid type, limit or query"),
             @ApiResponse(responseCode = "503", description = "Lists not downloaded yet; call POST /api/india/nse/sync")})
-    public List<NseSymbol> symbols(
+    public List<NseSymbol> searchSymbols(
             @Parameter(description = "Ticker or name text", example = "reli")
             @RequestParam(required = false) @Size(max = 100) String query,
             @Parameter(description = "EQUITY or ETF; omit for both")
@@ -56,7 +56,7 @@ public class NseSymbolController {
     @Operation(summary = "Download the NSE equity and ETF lists now (the scheduler does this weekly)")
     @ApiResponses({@ApiResponse(responseCode = "200", description = "Lists downloaded and stored"),
             @ApiResponse(responseCode = "502", description = "NSE download failed; the previous lists were kept")})
-    public NseSymbolService.SyncResult sync() {
-        return nseSymbolService.sync();
+    public NseSymbolService.SyncResult refreshSymbolLists() {
+        return nseSymbolService.refreshSymbolLists();
     }
 }

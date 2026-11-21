@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class YahooStockProfileClient {
     private final RestClient restClient;
-    private final AppProperties properties;
+    private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
 
     private static final String USER_AGENT =
@@ -64,7 +64,7 @@ public class YahooStockProfileClient {
 
     private String requestProfile(String symbol, YahooSession yahooSession) {
         return restClient.get()
-                .uri(UriComponentsBuilder.fromUriString(properties.getApis().getYahooBaseUrl())
+                .uri(UriComponentsBuilder.fromUriString(appProperties.getApis().getYahooBaseUrl())
                         .pathSegment("v10", "finance", "quoteSummary", symbol)
                         .queryParam("modules", "assetProfile,summaryProfile,summaryDetail,price")
                         .queryParam("crumb", yahooSession.crumb())
@@ -83,7 +83,7 @@ public class YahooStockProfileClient {
         }
         String cookie = fetchCookie();
         String crumb = restClient.get()
-                .uri(UriComponentsBuilder.fromUriString(properties.getApis().getYahooBaseUrl())
+                .uri(UriComponentsBuilder.fromUriString(appProperties.getApis().getYahooBaseUrl())
                         .pathSegment("v1", "test", "getcrumb")
                         .build()
                         .toUri())

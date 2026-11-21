@@ -20,8 +20,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(StockProfileController.class)
-class StockProfileControllerTest {
+@WebMvcTest(UsStockProfileController.class)
+class UsStockProfileControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
@@ -36,7 +36,7 @@ class StockProfileControllerTest {
 
     @Test
     void fetchFinnhubProfilesAcceptsSymbolList() throws Exception {
-        when(finnhubStockProfileService.fetchAndSave(List.of("AAPL")))
+        when(finnhubStockProfileService.refreshProfiles(List.of("AAPL")))
                 .thenReturn(List.of(new FinnhubStockProfile()));
 
         mockMvc.perform(post("/api/stocks/finnhub/profiles")
@@ -44,12 +44,12 @@ class StockProfileControllerTest {
                         .content("{\"symbols\":[\"AAPL\"]}"))
                 .andExpect(status().isOk());
 
-        verify(finnhubStockProfileService).fetchAndSave(List.of("AAPL"));
+        verify(finnhubStockProfileService).refreshProfiles(List.of("AAPL"));
     }
 
     @Test
     void fetchYahooProfilesAcceptsSymbolList() throws Exception {
-        when(yahooStockProfileService.fetchAndSave(List.of("AAPL", "MSFT")))
+        when(yahooStockProfileService.refreshProfiles(List.of("AAPL", "MSFT")))
                 .thenReturn(List.of(new YahooStockProfile(), new YahooStockProfile()));
 
         mockMvc.perform(post("/api/stocks/yahoo/profiles")
@@ -57,12 +57,12 @@ class StockProfileControllerTest {
                         .content("{\"symbols\":[\"AAPL\",\"MSFT\"]}"))
                 .andExpect(status().isOk());
 
-        verify(yahooStockProfileService).fetchAndSave(List.of("AAPL", "MSFT"));
+        verify(yahooStockProfileService).refreshProfiles(List.of("AAPL", "MSFT"));
     }
 
     @Test
     void fetchAlphaVantageOverviewsAcceptsSymbolList() throws Exception {
-        when(alphaVantageOverviewService.fetchAndSave(List.of("AAPL")))
+        when(alphaVantageOverviewService.refreshOverviews(List.of("AAPL")))
                 .thenReturn(List.of(new AlphaVantageOverview()));
 
         mockMvc.perform(post("/api/stocks/alphavantage/overview")
@@ -70,7 +70,7 @@ class StockProfileControllerTest {
                         .content("{\"symbols\":[\"AAPL\"]}"))
                 .andExpect(status().isOk());
 
-        verify(alphaVantageOverviewService).fetchAndSave(List.of("AAPL"));
+        verify(alphaVantageOverviewService).refreshOverviews(List.of("AAPL"));
     }
 
     @Test

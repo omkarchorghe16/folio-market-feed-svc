@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Integration tests for DigestTriggerController endpoints.
+ * Integration tests for DigestController endpoints.
  * Verifies REST endpoints respond correctly and return expected status codes.
  */
 @SpringBootTest
@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "app.apis.finnhub-key=",
         "app.apis.newsapi-key="
 })
-class DigestTriggerControllerTest {
+class DigestControllerTest {
     @Autowired
     private MockMvc mockMvc;
 

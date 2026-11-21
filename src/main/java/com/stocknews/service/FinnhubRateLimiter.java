@@ -8,7 +8,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Component
 @Slf4j
-public class FinnhubRequestRateLimiter {
+public class FinnhubRateLimiter {
     private static final long MINIMUM_INTERVAL_NANOS = 1_000_000_000L;
     private long nextAllowedRequestNanos;
 

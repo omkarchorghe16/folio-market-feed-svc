@@ -18,7 +18,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "Digest", description = "Trigger scheduled news digests")
-public class DigestTriggerController {
+public class DigestController {
     private final DigestService digestService;
 
     /**
@@ -26,10 +26,10 @@ public class DigestTriggerController {
      */
     @PostMapping("/run")
     @Operation(summary = "Run the daily digest")
-    public ResponseEntity<String> triggerDailyDigest() {
+    public ResponseEntity<String> sendDailyDigest() {
         log.info("On-demand daily digest triggered via REST endpoint");
         try {
-            digestService.runDailyDigest();
+            digestService.sendDailyDigest();
             return ResponseEntity.ok("Daily digest executed successfully");
         } catch (Exception e) {
             log.error("Error executing daily digest:\n{}", ExceptionLog.stackTrace(e));
