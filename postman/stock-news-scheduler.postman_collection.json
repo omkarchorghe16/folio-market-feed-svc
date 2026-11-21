@@ -77,36 +77,6 @@
             "url": "{{url}}{{apiPath}}/run"
           },
           "response": []
-        },
-        {
-          "name": "Trigger Portfolio Digest",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {\n  pm.response.to.have.status(200);\n});\n",
-                  "pm.test(\"Portfolio digest execution message received\", function () {\n  pm.expect(pm.response.text()).to.include(\"Portfolio digest executed successfully\");\n});\n"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": ""
-            },
-            "url": "{{url}}{{apiPath}}/portfolio"
-          },
-          "response": []
         }
       ]
     },

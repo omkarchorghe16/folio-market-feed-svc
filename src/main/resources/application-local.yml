@@ -31,18 +31,6 @@ fmp:
   us-exchanges-only: ${FMP_US_EXCHANGES_ONLY:true}
   # A saved profile updated today (in this zone) is served from PostgreSQL; otherwise FMP is called.
   profile-refresh-time-zone: ${FMP_PROFILE_REFRESH_TIME_ZONE:America/Chicago}
-  watchlist:
-    us-symbols:
-      - AAPL
-      - GOOGL
-      - MSFT
-    nse-symbols:
-      - RELIANCE.NS
-      - INFY.NS
-      - TCS.NS
-    portfolio-symbols:
-      - AAPL
-      - INFY.NS
   schedule:
     cron-expression: "0 */5 * * * *"  # Every 5 minutes for local testing
     timezone: "America/Chicago"

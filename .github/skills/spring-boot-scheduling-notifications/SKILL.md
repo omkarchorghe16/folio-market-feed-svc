@@ -18,7 +18,7 @@ delivery-channel behavior.
 - Add new delivery channels behind the existing `Notifier` interface where that contract fits.
   Existing notifier implementations report delivery success as a boolean; preserve that behavior
   unless deliberately changing and testing it.
-- Keep schedules, time zones, watchlists, and notification/provider settings in `AppProperties` and
+- Keep schedules, time zones, and notification/provider settings in `AppProperties` and
   `application.yml`. For Docker Compose local runs, supported schedule and WhatsApp settings can be
   overridden through the ignored `.env` file. Host-run local applications can load notification
   credentials from the ignored root-level `application-secrets.yml`; preserve that developer-owned

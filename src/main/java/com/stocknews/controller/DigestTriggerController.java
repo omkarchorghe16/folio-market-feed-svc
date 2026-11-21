@@ -11,7 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * REST controller for on-demand digest triggers.
- * Provides endpoints to manually trigger daily and portfolio digests without waiting for scheduled execution.
+ * Provides endpoints to manually trigger the daily digest without waiting for scheduled execution.
  */
 @RestController
 @RequestMapping("/api/digest")
@@ -33,22 +33,6 @@ public class DigestTriggerController {
             return ResponseEntity.ok("Daily digest executed successfully");
         } catch (Exception e) {
             log.error("Error executing daily digest:\n{}", ExceptionLog.stackTrace(e));
-            return ResponseEntity.status(500).body("Error executing digest: " + e.getMessage());
-        }
-    }
-
-    /**
-     * POST /api/digest/portfolio - Trigger the portfolio-specific digest.
-     */
-    @PostMapping("/portfolio")
-    @Operation(summary = "Run the portfolio digest")
-    public ResponseEntity<String> triggerPortfolioDigest() {
-        log.info("On-demand portfolio digest triggered via REST endpoint");
-        try {
-            digestService.runPortfolioDigest();
-            return ResponseEntity.ok("Portfolio digest executed successfully");
-        } catch (Exception e) {
-            log.error("Error executing portfolio digest:\n{}", ExceptionLog.stackTrace(e));
             return ResponseEntity.status(500).body("Error executing digest: " + e.getMessage());
         }
     }

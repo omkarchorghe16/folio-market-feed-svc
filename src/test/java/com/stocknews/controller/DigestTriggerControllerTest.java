@@ -39,10 +39,4 @@ class DigestTriggerControllerTest {
         mockMvc.perform(post("/api/digest/run"))
                 .andExpect(status().isOk());
     }
-
-    @Test
-    void testPortfolioDigestEndpointExists() throws Exception {
-        mockMvc.perform(post("/api/digest/portfolio"))
-                .andExpect(status().isOk());
-    }
 }

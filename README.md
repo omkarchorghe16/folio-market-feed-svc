@@ -9,7 +9,6 @@ A complete Java Spring Boot application that fetches daily stock market news for
 - **Multiple News Sources**: Integrates Finnhub and NewsAPI.org
 - **Smart Deduplication**: SHA-256 based dedup with 3-day history stored in PostgreSQL
 - **Multi-Channel Notifications**: Slack, Telegram, WhatsApp (Twilio)
-- **Portfolio Tracking**: Separate digest for configured portfolio symbols (Slack-only)
 - **On-Demand Triggers**: REST endpoints to manually trigger digests without waiting for schedule
 - **Stock Profiles**: Fetch Finnhub, Yahoo Finance, Alpha Vantage, and FMP company information and persist it in PostgreSQL
 - **India Stocks**: Tapetide (NSE/BSE fundamentals, profiles, financials, shareholding, forecasts, history) and Upstox (live quotes, candles) under `/api/india/*`, cached in PostgreSQL to save provider quota
@@ -46,8 +45,7 @@ com/stocknews/
 │   └── DigestScheduler.java        # Scheduled cron job
 ├── digest/
 │   ├── DigestService.java          # Orchestrates fetch → dedup → format → notify
-│   ├── DigestFormatter.java        # Formats messages for each channel
-│   └── Watchlist.java              # Manages US/NSE symbol lists
+│   └── DigestFormatter.java        # Formats messages for each channel
 ├── client/
 │   ├── NewsItem.java               # Record: title, url, source, publishedAt, symbol, market
 │   ├── NewsSourceClient.java       # Interface
@@ -590,18 +588,6 @@ Response:
 }
 ```
 
-#### Trigger Portfolio Digest
-```bash
-curl -X POST http://localhost:8082/api/digest/portfolio
-```
-
-Response:
-```json
-{
-  "message": "Portfolio digest executed successfully"
-}
-```
-
 #### Health Check
 ```bash
 curl http://localhost:8082/api/digest/health
@@ -650,30 +636,6 @@ app:
     alpha-vantage-base-url: ${ALPHA_VANTAGE_BASE_URL:https://www.alphavantage.co/query}
     timeout-seconds: 5  # HTTP timeout
     max-retries: 1  # Retry attempts
-  watchlist:
-    us-symbols:  # Top 10 US stocks fetched daily
-      - AAPL
-      - GOOGL
-      - MSFT
-      - TSLA
-      - META
-      - AMZN
-      - NVDA
-      - JPM
-      - V
-      - WMT
-    nse-symbols:  # Top 10 India stocks fetched daily
-      - RELIANCE.NS
-      - INFY.NS
-      - TCS.NS
-      - WIPRO.NS
-      - LT.NS
-      - MARUTI.NS
-      - BAJAJ-AUTO.NS
-      - ICICIBANK.NS
-      - SBIN.NS
-      - BHARTIARTL.NS
-    portfolio-symbols: []  # Optional: specific symbols for portfolio digest
   schedule:
     cron-expression: "0 0 9 * * MON-FRI"  # 9 AM weekdays
     timezone: "America/Chicago"
@@ -891,14 +853,14 @@ logging:
 ┌─────────────────────────────────────────────────────────────┐
 │                    DigestService                            │
 │  (Orchestrates: Fetch → Dedup → Format → Notify)          │
-└─────────┬──────────┬──────────────────┬──────────────────────┘
-          │          │                  │
-    ┌─────▼──┐  ┌────▼────┐       ┌────▼─────┐
-    │Finnhub │  │ NewsAPI │       │Watchlist │
-    │Client  │  │ Client  │       │  Symbols │
-    └────────┘  └─────────┘       └──────────┘
-          │          │                  │
-          └─────────┬────────────────────┘
+└─────────┬──────────┬────────────────────────────────────────┘
+          │          │
+    ┌─────▼──┐  ┌────▼────┐
+    │Finnhub │  │ NewsAPI │
+    │Client  │  │ Client  │
+    └────────┘  └─────────┘
+          │          │
+          └────┬─────┘
                     ▼
           ┌──────────────────┐
           │  NewsItem List   │
@@ -930,8 +892,7 @@ To extend the application:
 1. **Add a new news source**: Implement `NewsSourceClient` interface
 2. **Add a new notifier**: Implement `Notifier` interface
 3. **Change schedule**: Modify cron expression in config
-4. **Add new watchlist**: Extend `Watchlist` component
-5. **Document changes**: Update the README and directly affected docs, and review all
+4. **Document changes**: Update the README and directly affected docs, and review all
    `.github/skills/*/SKILL.md` files; update every skill affected by the implementation or shared
    project conventions.
 

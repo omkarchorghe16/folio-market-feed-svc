@@ -41,7 +41,6 @@ public class DigestService {
     private final TelegramNotifier telegramNotifier;
     private final WhatsAppNotifier whatsAppNotifier;
     private final DigestFormatter digestFormatter;
-    private final Watchlist watchlist;
     private final SentArticleRepository sentArticleRepository;
 
     /**
@@ -49,7 +48,6 @@ public class DigestService {
      */
     public void runDailyDigest() {
         log.info("Starting daily digest job");
-        watchlist.logWatchlist();
 
         // Fetch US market news
         log.info("Fetching US market news...");
@@ -95,36 +93,6 @@ public class DigestService {
         }
 
         log.info("Daily digest job completed");
-    }
-
-    /**
-     * Execute portfolio-specific digest: fetch, deduplicate, format for portfolio webhook, and send.
-     */
-    public void runPortfolioDigest() {
-        log.info("Starting portfolio digest job");
-        List<String> portfolioSymbols = watchlist.getPortfolioSymbols();
-        if (portfolioSymbols.isEmpty()) {
-            log.info("No portfolio symbols configured, skipping");
-            return;
-        }
-
-        List<NewsItem> portfolioNews = new ArrayList<>();
-        for (String symbol : portfolioSymbols) {
-            log.info("Fetching news for portfolio symbol: {}", symbol);
-            portfolioNews.addAll(finnhubNewsClient.fetchNewsForSymbol(symbol));
-        }
-        log.info("Fetched {} portfolio news items", portfolioNews.size());
-
-        portfolioNews = deduplicateNews(portfolioNews);
-        log.info("After dedup: {} portfolio items", portfolioNews.size());
-
-        if (!portfolioNews.isEmpty()) {
-            String portfolioDigest = digestFormatter.formatForSlack(portfolioNews, "Portfolio");
-            log.info("Sending portfolio digest to Slack");
-            slackNotifier.send("portfolio", portfolioDigest);
-        }
-
-        log.info("Portfolio digest job completed");
     }
 
     /**
