@@ -90,6 +90,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: maven
+
+      # The Dockerfile copies a prebuilt jar from target/, which this fresh checkout does not have.
+      - name: Package application
+        run: mvn --batch-mode -DskipTests package
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
