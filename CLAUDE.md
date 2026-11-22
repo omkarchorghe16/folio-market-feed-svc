@@ -11,12 +11,24 @@ The Folio Pro Angular app (`../personal-wealth-management-angular`) calls its `/
 Before any code change, use the `java-coding-standards` skill (`.claude/skills/java-coding-standards/SKILL.md`).
 It loads the project rules, which live in `.github/` and apply to Claude Code as well:
 
-- `.github/copilot-instructions.md` — repository rules, including the documentation/skill sync policy.
-- `.github/instructions/*.instructions.md` — coding standards, naming and readability, architecture,
-  Spring Boot, logging.
-- `.github/skills/*/SKILL.md` — workflows for REST APIs, JPA, providers, scheduling/notifications, tests.
+- `.github/copilot-instructions.md` — repository overview and the list of rule files.
+- `.github/instructions/project.instructions.md` — rules for this repository only (packages, shared
+  database, providers, secrets files, final checks).
+- `.github/instructions/*.instructions.md` (the rest) — shared change-hygiene, coding standards,
+  naming and readability, architecture, Spring Boot and logging rules.
+- `.github/skills/*/SKILL.md` — workflows for REST APIs, JPA, providers, logging, tests, and the
+  repository-only `spring-boot-scheduling-notifications`.
 
-When a rule changes, edit the `.github/` file so Claude Code and Copilot stay in sync.
+### Where to change a rule
+
+- Rules for this repository only: edit `project.instructions.md`, `copilot-instructions.md` or
+  `spring-boot-scheduling-notifications` here.
+- Shared rules and skills: every file that starts with a `Managed by dev-standards` comment, plus
+  `.claude/skills/java-coding-standards`, is copied from
+  https://github.com/omkarchorghe16/dev-standards (cloned at `../dev-standards`) and listed in
+  `.github/dev-standards.lock`. Do not edit those copies here. Change them in `../dev-standards`, then
+  run `./sync.sh --all` there and commit the result in each repository.
+- `../dev-standards/sync.sh --check .` (run from this repository) reports drift.
 
 ## Commands
 

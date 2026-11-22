@@ -1,39 +1,28 @@
-# Repository instructions
+# Repository instructions: news-scheduler-svc
 
-For every code change, follow the standards in:
+Spring Boot (Java 21, Maven) service on port 8082. It fetches market data and news from external
+providers (FMP, Finnhub, Yahoo, Alpha Vantage for US; Tapetide and Upstox for India), stores it in
+the shared `folio_pro` PostgreSQL database, and sends scheduled news digests (Slack, Telegram,
+WhatsApp).
 
-- `.github/instructions/coding-standards.instructions.md`
-- `.github/instructions/naming-and-readability.instructions.md`
-- `.github/instructions/architecture.instructions.md`
-- `.github/instructions/spring-boot.instructions.md`
-- `.github/instructions/logging.instructions.md`
+For every code change, follow:
 
-These are mandatory project conventions. Keep changes focused, preserve existing behavior unless
-the request requires a behavior change, and add or update tests for changed behavior. Never commit
-credentials or log secrets, request tokens, or full provider payloads.
+- `.github/instructions/project.instructions.md`: this repository's packages, reference classes,
+  shared-database rules, provider specifics, secrets files and final checks. Edited here.
+- Shared standards, copied from https://github.com/omkarchorghe16/dev-standards (do not edit them
+  here; change them there and run its `sync.sh`):
+  - `.github/instructions/change-hygiene.instructions.md`
+  - `.github/instructions/coding-standards.instructions.md`
+  - `.github/instructions/naming-and-readability.instructions.md`
+  - `.github/instructions/architecture.instructions.md`
+  - `.github/instructions/spring-boot.instructions.md`
+  - `.github/instructions/logging.instructions.md`
 
-## Copilot skills
+## Skills
 
-Reusable task workflows are in `.github/skills/*/SKILL.md`. Load all relevant skills when working on
-REST endpoints, architecture, JPA persistence, external providers, scheduled digests/notifications,
-or tests. These skills supplement the repository-wide instructions above; the instruction files
-remain authoritative for rules that apply to every code change.
-
-## Documentation and skill synchronization
-
-For every new or changed code behavior or functionality:
-
-1. Review every skill in `.github/skills/`, not only the skill selected for the task. Update all
-   skills whose instructions, examples, workflows, or project conventions are affected; keep shared
-   guidance consistent across the full set. Do not make unrelated wording-only edits to unaffected
-   skills.
-2. Update `README.md` when features, setup, configuration, API usage, architecture, operations, or
-   contributor workflows change.
-3. Update any directly related documentation, including OpenAPI annotations, the Postman collection,
-   configuration examples, and operational/deployment instructions, when their behavior or contract
-   changes.
-4. In the final handoff, identify any documentation intentionally not changed and why when a
-   documentation surface is relevant but unchanged.
-
-Do not treat this requirement as satisfied by updating code alone. Keep docs and skills accurate,
-actionable, and consistent with the implemented application.
+Reusable workflows are in `.github/skills/*/SKILL.md`. Load every relevant skill when working on
+REST endpoints, architecture, JPA persistence, external providers, scheduled digests and
+notifications, or tests. `spring-boot-scheduling-notifications` is specific to this repository and
+edited here; the other skills are shared from dev-standards. The instruction files stay
+authoritative for rules that apply to every change, and `project.instructions.md` wins where it is
+more specific.

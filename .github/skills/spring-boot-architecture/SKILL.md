@@ -1,99 +1,55 @@
 ---
 name: spring-boot-architecture
-description: Plan or change application architecture, module boundaries, cross-cutting behavior, persistence topology, or shared Spring Boot conventions in this repository.
+description: Plan or change application architecture, layer and package boundaries, cross-cutting behavior, persistence topology or deployment topology in a Spring Boot service.
 ---
+
+<!-- Managed by dev-standards (stacks/java-spring/skills/spring-boot-architecture/SKILL.md). Edit it in https://github.com/omkarchorghe16/dev-standards and run sync.sh; local edits are overwritten. -->
 
 # Spring Boot architecture workflow
 
-Use this skill when a change spans multiple layers/packages, moves responsibilities, changes
-application-wide conventions, affects deployment topology, or introduces a new subsystem.
-
-## Current application boundaries
-
-- `controller` owns HTTP mappings, request validation, and response construction.
-- `service` and feature packages coordinate use cases and transaction boundaries.
-- Provider clients own external HTTP calls, provider-specific parsing, and provider error mapping.
-- `model` contains JPA entities/domain persistence records; `repository` contains Spring Data access.
-- `config` binds typed settings and configures shared infrastructure such as `RestClient`.
-- `scheduler` triggers scheduled workflows; `digest` coordinates news fetching, deduplication,
-  formatting, and notification delivery; `notification` owns channel-specific delivery.
-- `india/nse` keeps NSE's equity/ETF symbol lists as CSV files on local disk (`nse.storage-directory`),
-  not in PostgreSQL; the files are re-downloaded at startup when missing, so pods/containers without a
-  volume still work after a restart.
-- `us/nasdaq` follows the same design for US symbols: Nasdaq Trader's `nasdaqlisted.txt` and
-  `otherlisted.txt` are stored on local disk (`nasdaq.storage-directory`), not in PostgreSQL, and
-  re-downloaded at startup when missing.
-- PostgreSQL is the application datasource. H2 is configured for tests only; there is no production
-  H2 mirror in the current architecture.
-- The service shares the `folio_pro` PostgreSQL database with investment-management-svc; both services'
-  tables live in its `public` schema (folio-pro's via Flyway, this service's via Hibernate), so table
-  names must stay unique across the two. For local
-  development, `compose.yaml` runs only the Spring Boot container, which connects to the Mac-hosted
-  database at `host.docker.internal:5432/folio_pro`; a Spring Boot app launched on the host and Mac
-  database clients use `localhost:5432/folio_pro`. The ignored `.env` supplies datasource and provider/notification
-  configuration to Compose; host-run Maven/IDE processes can load credentials from the ignored
-  root-level `application-secrets.yml`, imported by `application.yml`. Run the IDE from the repository
-  root and restart after changing secrets. Keep this local file as the persistent source for developer
-  credentials; do not overwrite or regenerate it during routine work. Keep
-  `src/main/resources/application-local.yml` tracked and free of real credentials; do not edit it to
-  move or duplicate local secrets. Never commit either secrets file or copy it into the image.
-- `k8s/` and `scripts/deploy-local-k8s.sh` remain an optional single-user Docker Desktop workflow
-  using PostgreSQL on the Mac host. It keeps one replica because scheduling is instance-local and
-  syncs the ignored local secrets file into a Kubernetes Secret.
-- The GitHub Actions workflow packages/tests the application and builds a Docker image on pushes,
-  pull requests, and manual dispatches. It does not publish the image or deploy because Docker
-  Desktop Kubernetes is local-only; `scripts/deploy-local-k8s.sh` deploys and smoke-tests the image.
+Use this skill when a change spans several layers or packages, moves responsibilities, changes
+application-wide conventions, affects deployment topology or introduces a new subsystem. The
+repository's current boundaries (packages, shared database, deployment) are described in
+`.github/instructions/project.instructions.md`.
 
 ## Architecture rules
 
-- Preserve one-way dependencies: controllers -> services/features -> clients/repositories. Avoid
-  cycles and prevent controllers/entities from acquiring infrastructure responsibilities.
-- Keep provider-specific transport and response interpretation behind provider clients. Keep HTTP
-  transport for notification channels within channel notifier components.
-- Use `AppProperties` or provider-specific `@ConfigurationProperties` for configurable settings.
-  Keep credentials external to tracked files and redact secrets from logs and error responses.
-- Put transaction boundaries around database workflows at the service/use-case layer. Avoid holding
-  database transactions open across slow provider or notification calls unless atomicity explicitly
-  requires it.
-- Treat provider quotas, timeout, retries, caching, idempotency, and failure behavior as explicit
-  design constraints. Preserve durable quota tracking when a provider limit is persisted today.
-- Keep public transport DTOs distinct from persistence entities; update OpenAPI and Postman whenever
-  public API behavior changes.
-- Keep provider-specific API routes in appropriately scoped controllers (for example,
-  `FmpProfileController` under `/api/fmp`) and stock-management routes separate from provider-fetch
-  workflows (for example, `StockSymbolController` under `/api/stock-symbols`).
-- FMP profile writes upsert by ticker symbol, then read persisted profiles for the response; the
-  GET and POST both return full profiles, calling FMP only for symbols not updated today.
-- Do not introduce another datasource, production H2 mirroring, migration framework, security
-  mechanism, or new architecture pattern without confirming compatibility and the intended trade-off.
-- Keep local Compose PostgreSQL isolated in its named volume and bound to host loopback; do not
-  conflate it with the separate Mac-hosted PostgreSQL used by the optional Kubernetes configuration.
-  Keep local `.env` secrets out of the build context and image.
-- Keep Docker Desktop Kubernetes at one application instance unless scheduled-work coordination is
-  introduced; never commit Kubernetes Secrets or application credentials.
+- Preserve one-way dependencies: controllers -> services/features -> clients/repositories. Keep
+  infrastructure responsibilities out of controllers and entities.
+- Keep provider transport and response interpretation behind provider clients, and channel
+  transport (Slack, Telegram, email) behind notifier components.
+- Use typed `@ConfigurationProperties` for settings. Keep credentials out of tracked files and
+  redact them from logs and error responses.
+- Put transaction boundaries at the service layer and keep slow network calls outside them unless
+  atomicity requires otherwise.
+- Treat quotas, timeouts, retries, caching, idempotency and failure behavior as explicit design
+  constraints.
+- Keep public DTOs distinct from JPA entities.
+- When two services share one database, keep table names unique across them and never alter or
+  map the other service's tables.
+- Keep a scheduler-bearing service at one instance unless scheduled work is coordinated across
+  instances.
+- Do not introduce another datasource, production H2 mirror, migration framework, security
+  mechanism or architecture pattern without confirming the trade-off with the owner.
 
 ## Implementation sequence
 
-1. Trace the end-to-end flow and inspect the affected controllers, services, clients, configuration,
-   models, repositories, tests, and documentation before editing.
-2. State the existing boundary and the smallest responsible layer for the change; keep behavior in
-   that layer and avoid unrelated refactoring.
-3. Identify impacts on runtime configuration, persistence/schema, transactions, public API, secrets,
-   scheduling, provider limits, and failure/observability behavior.
-4. Implement the smallest coherent change and add tests at the affected layer boundaries.
-5. Review **every** skill in `.github/skills/`. Update all skills affected by new or changed shared
-   behavior, conventions, or workflows; ensure the set remains mutually consistent without
-   needlessly editing unrelated guidance.
-6. Update `README.md` and all directly related API, configuration, architecture, deployment, or
-   operational documentation. Keep OpenAPI and the Postman collection in sync for public APIs.
-7. Run the smallest existing tests/build that exercise the change and report any remaining
-   documentation or operational decision that needs owner input.
+1. Trace the end-to-end flow through the affected controllers, services, clients, configuration,
+   models, repositories, tests and docs before editing.
+2. Name the existing boundary and the smallest layer that owns the requested behavior; keep the
+   change there and avoid unrelated refactoring.
+3. Identify impacts on configuration, schema, transactions, public API, secrets, scheduling,
+   provider limits and observability.
+4. Implement the smallest coherent change and add tests at the affected boundaries.
+5. Review every skill in `.github/skills/` and update the affected ones.
+6. Update `README.md` and directly related API, configuration, architecture or deployment docs.
+7. Run the smallest relevant tests/build and report any decision that needs owner input.
 
-## Architecture review checklist
+## Review checklist
 
-- Responsibilities and package placement match existing boundaries.
-- Configuration is typed, environment-specific, and safe by default.
-- Persistence and transaction semantics are explicit; PostgreSQL remains authoritative.
-- Network failures, quotas, and external side effects have defined behavior.
-- Tests cover relevant component boundaries without live external dependencies.
-- README, relevant docs, and all affected skills match actual code; no secrets are exposed.
+- Responsibilities and package placement match the existing layers.
+- Configuration is typed and safe by default.
+- Schema and transaction semantics are explicit; PostgreSQL remains authoritative.
+- Network failures, quotas and external side effects have defined behavior.
+- Tests cover the boundaries without live external dependencies.
+- README, docs and skills match the code; no secrets are exposed.

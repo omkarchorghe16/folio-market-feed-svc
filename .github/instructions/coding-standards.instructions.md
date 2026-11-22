@@ -2,27 +2,26 @@
 applyTo: "**/*.java"
 ---
 
+<!-- Managed by dev-standards (stacks/java-spring/instructions/coding-standards.instructions.md). Edit it in https://github.com/omkarchorghe16/dev-standards and run sync.sh; local edits are overwritten. -->
+
 # Java coding standards
 
-- Use Java 21 and existing Spring Boot, Lombok, and project conventions.
+- Use Java 21 and the project's existing Spring Boot, Maven and library conventions.
 - Prefer small, cohesive classes and methods with explicit types and clear names.
-- Keep controller methods limited to HTTP mapping, validation, delegation, and response handling.
-- Use constructor injection; use Lombok `@RequiredArgsConstructor` where consistent with nearby code.
-- Validate external input at the boundary with Jakarta Bean Validation and explicit constraints.
-- Preserve type safety; avoid unchecked casts, `Object`-typed APIs, and unnecessary abstractions.
-- Handle expected provider failures explicitly. Do not swallow exceptions, return empty success-shaped
-  values for errors, or add broad catches.
-- Keep API keys and credentials outside source-controlled files. Read configuration from environment
-  variables or an ignored local secrets file; do not expose secrets in logs, tests, fixtures, or Postman.
-- Add focused tests for new behavior and update relevant documentation.
-- Keep package names descriptive, lowercase, and consistent with their source directories.
-- Add provider integrations behind provider-specific clients; represent returned fields using typed
-  persistence/domain models rather than unstructured maps.
-- Keep endpoint changes in sync across the controller, OpenAPI annotations, MockMvc tests, and the
-  Postman collection when the public API changes.
-- For each new or changed feature, review every skill under `.github/skills/` and update all skills
-  affected by the implementation or conventions. Keep `README.md` and directly related project
-  documentation current; do not leave relevant skill or user-facing documentation stale.
-- Do not add secrets or live provider credentials to source, tests, Postman requests/environments,
-  logs, or committed configuration.
-- Run the smallest relevant existing build/test commands after changing code.
+- Keep controllers limited to HTTP mapping, boundary validation, service delegation and response
+  handling.
+- Use constructor injection with `private final` dependencies. Use Lombok
+  (`@RequiredArgsConstructor`, `@Slf4j`) only where the project and nearby code already use it.
+- Validate external input at the boundary with Jakarta Bean Validation and explicit constraints;
+  keep use-case rules in the service layer.
+- Preserve type safety. Avoid unchecked casts, `Object`-typed APIs, untyped `Map`/`JsonNode`
+  responses and unnecessary abstractions.
+- Handle expected failures explicitly. Do not swallow exceptions, add broad catches, or return
+  empty success-shaped values for errors.
+- Keep credentials outside source-controlled files, tests, fixtures and Postman files; use
+  environment variables or ignored local files.
+- Put each external API behind a provider-specific client and map its responses to typed models.
+- Keep endpoint changes in sync across the controller, OpenAPI annotations, MockMvc tests, the
+  Postman collection and the README when the public API changes.
+- Keep package names descriptive, lowercase and aligned with source directories.
+- Run the smallest relevant existing Maven test/build command after changes.

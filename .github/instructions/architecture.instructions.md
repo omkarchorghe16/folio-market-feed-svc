@@ -2,40 +2,31 @@
 applyTo: "**/*.java"
 ---
 
+<!-- Managed by dev-standards (stacks/java-spring/instructions/architecture.instructions.md). Edit it in https://github.com/omkarchorghe16/dev-standards and run sync.sh; local edits are overwritten. -->
+
 # Architecture standards
 
-- Keep the application layered: `controller` handles HTTP, `service`/feature packages orchestrate
-  use cases, provider clients handle external APIs, and `model`/`repository` own JPA entities and
-  database access.
-- Controllers must not call provider clients or repositories directly; delegate through a service.
-- Keep provider-specific API parsing and error translation in that provider's client.
-- Keep JPA entities focused on persistence. Do not put HTTP behavior or orchestration in entities.
-- Use Spring Data repositories for database access and service-level transactions when a workflow
-  needs atomic persistence.
-- Normalize and validate symbols once at the service boundary before calling providers or querying.
-- Bind external configuration using the existing `AppProperties` or provider-specific
-  `@ConfigurationProperties` classes; document defaults and environment variable names in
-  `application.yml`. Do not hard-code credentials.
+- Keep the application layered: `controller` handles HTTP; `service` (or a feature package)
+  coordinates use cases and transactions; provider clients call external APIs; `model` and
+  `repository` own JPA entities and database access.
+- Controllers must not call repositories or provider clients directly; delegate through a service.
+- Keep dependencies one-way: controllers -> services -> clients/repositories. Avoid cycles between
+  web, service, client and persistence layers.
+- Keep provider-specific request building, response parsing and error translation in that
+  provider's client.
+- Keep JPA entities focused on persistence, not HTTP behavior or orchestration. Keep public
+  transport DTOs separate from entities.
+- Put transaction boundaries on service workflows, not controllers or repositories. Do not hold a
+  database transaction open across slow provider or notification calls unless atomicity needs it.
+- Normalize and validate identifiers (for example stock symbols) once at the service boundary.
+- Bind configuration through typed `@ConfigurationProperties` classes and document defaults and
+  environment variable names in `application.yml`. Never hard-code credentials.
+- PostgreSQL is the application datasource; H2 is for tests only. Do not add a production H2
+  mirror, another datasource, migration framework, security mechanism or new architecture pattern
+  without an explicit decision.
+- Keep schema changes explicit. If the project uses Flyway, every schema change is a new migration.
 - Keep provider schemas and persistence tables separate when fields or units differ.
-- Do not create cyclic dependencies between web, service, client, and persistence layers.
-- Use descriptive lowercase package names (`notification`, not abbreviations) and keep source
-  directories aligned with package declarations.
-- PostgreSQL is the application datasource. H2 is configured for tests only; do not introduce a
-  production H2 mirror or treat test H2 data as authoritative without an explicit architecture
-  decision.
-- The datasource is the shared `folio_pro` database (shared with investment-management-svc); all
-  tables of both services live in the `public` schema, so keep table names unique across them. The application connects to `localhost:5432/folio_pro` when run from the host and
-  `host.docker.internal:5432/folio_pro` from the Compose app container; Compose does not run
-  PostgreSQL. Keep this service's tables out of folio-pro's `public` schema. The workflow in
-  `.github/workflows/ci-cd.yml` packages/tests the application and builds a Docker image, but does
-  not publish it or deploy because Docker Desktop Kubernetes is local-only. The local deploy script
-  applies the image and smoke-tests readiness.
-- Docker Desktop Kubernetes under `k8s/` is an optional local-only workflow. Keep it separate from
-  the default Compose workflow and do not commit Kubernetes Secrets or local application credentials.
-- Put transaction boundaries on service workflows, not controllers or repositories, unless an
-  existing repository convention requires otherwise.
-- For every feature or behavior change, review all files in `.github/skills/` and update every skill
-  whose workflow or project guidance is affected. Keep shared conventions consistent across skills;
-  do not churn unrelated skill content.
-- Keep `README.md` and relevant API, configuration, and operational documentation synchronized with
-  implemented behavior. Public API changes also require synchronized OpenAPI and Postman examples.
+- Docker Compose is the default local container workflow. Kubernetes manifests, when present, are
+  optional and local-only; never commit Kubernetes Secrets or local credentials.
+- Keep `README.md` and relevant API, configuration and operational documentation synchronized with
+  implemented behavior. Public API changes also need synchronized OpenAPI and Postman examples.

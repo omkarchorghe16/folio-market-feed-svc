@@ -1,65 +1,52 @@
 ---
 name: spring-boot-jpa
-description: Add or change JPA entities, Spring Data repositories, transactions, and database-backed services in this PostgreSQL-backed Spring Boot application.
+description: Add or change JPA entities, Spring Data repositories, schema migrations, transactions and database-backed services in a PostgreSQL-backed Spring Boot service.
 ---
+
+<!-- Managed by dev-standards (stacks/java-spring/skills/spring-boot-jpa/SKILL.md). Edit it in https://github.com/omkarchorghe16/dev-standards and run sync.sh; local edits are overwritten. -->
 
 # Spring Data JPA workflow
 
-Use this skill when changing persisted data, repository queries, or transactional service workflows.
+Use this skill when changing persisted data, repository queries, schema or transactional service
+workflows. How this repository manages its schema (Flyway or Hibernate `update`), its packages and
+any shared-database rules are in `.github/instructions/project.instructions.md`.
 
-## Project conventions
+## Conventions
 
-- PostgreSQL is the application datasource configured in `src/main/resources/application.yml`.
-  H2 is configured for tests in `src/test/resources/application.yml`; there is no production H2
-  mirror in the current architecture.
-- The database is the shared `folio_pro` PostgreSQL (also used by investment-management-svc) on the
-  Mac at `localhost:5432`, role `folio_pro`. This service's tables share the `public` schema with
-  folio-pro's Flyway-managed tables. Keep new entity table names distinct from folio-pro's
-  (`portfolios`, `holdings`, `watchlists_*`, `watchlist_items_*`, `user_preferences`), never alter or
-  map folio-pro's tables, and never suggest `flyway clean` on this database. Compose runs only the app container, which connects via
-  `host.docker.internal:5432/folio_pro`. The ignored `.env` configures Compose. Host-run Maven/IDE processes can load datasource credentials
-  from the ignored root-level `application-secrets.yml`; run from the repository root and restart
-  after editing it. Preserve this developer-owned file and its values during routine work; do not
-  move credentials into the tracked `src/main/resources/application-local.yml`.
-  Docker Desktop Kubernetes is an optional local-only workflow using PostgreSQL on the Mac host.
-- JPA entities live in `com.stocknews.model`; Spring Data repositories live in
-  `com.stocknews.repository`; use-case transactions belong in service classes.
-- Preserve existing entity/table/column naming and typed models. Keep provider-specific records
-  separate when their schemas or units differ.
-- FMP profiles are upserted by their unique symbol, retaining an existing entity ID and
-  `created_date` on refresh; `updated_date` changes on every refresh. GET and POST both serve rows
-  updated today from PostgreSQL and refresh stale or missing symbols from FMP, saving each one as soon
-  as it is fetched. Hibernate `update` cannot add a `NOT NULL` column to a non-empty table, so add such
-  columns with a manual backfill migration first.
-- Keep HTTP concerns out of entities and repository interfaces.
-- Use `@Transactional(readOnly = true)` for read workflows and `@Transactional` for mutations or
-  multi-step workflows that need one database transaction.
-- Match existing repository naming patterns and fetch requirements. Avoid introducing N+1 behavior
-  when converting entity relations into response DTOs.
-- The stock-symbol ingestion workflow delegates to `StockService.createBulk`; symbols are normalized,
-  existing tickers in the same sector are skipped, and newly created records are returned.
+- PostgreSQL is the application datasource (`src/main/resources/application.yml`); H2 is for tests
+  only.
+- Entities live in the `model` package, Spring Data repositories in `repository`, and transaction
+  boundaries in services.
+- Flyway projects: every schema change is a new `V<n>__<description>.sql`; never edit an applied
+  migration, never rely on Hibernate schema creation, and mirror the change in the H2 test schema
+  if the project keeps one.
+- Hibernate `update` projects: `update` cannot add a `NOT NULL` column to a non-empty table; add
+  such columns with a manual backfill first.
+- Preserve existing entity, table and column names. Keep provider-specific records separate when
+  their schemas or units differ.
+- Keep HTTP concerns out of entities and repositories.
+- Use `@Transactional(readOnly = true)` for reads and `@Transactional` for mutations or multi-step
+  workflows that need one transaction.
+- Avoid N+1 queries when mapping entity relations to response DTOs, and never return lazy entities
+  to the web layer.
 
 ## Implementation sequence
 
-1. Inspect the entity, service, repository, datasource configuration, and existing tests that touch
-   the data.
-2. Make schema and relationship changes explicit. Check nullability, uniqueness, foreign keys,
-   indexes, and entity lifecycle behavior.
+1. Inspect the entities, repositories, services, datasource configuration, migrations and tests
+   that touch the data.
+2. Make schema and relationship changes explicit: nullability, uniqueness, foreign keys, indexes,
+   cascade and lifecycle behavior.
 3. Put query selection and business decisions in the service; keep repository methods focused on
-   database access.
-4. Add focused unit or repository/service tests using the existing test profile and H2. Keep tests
-   independent from a developer's local PostgreSQL database.
-5. If the data is exposed over HTTP, update its DTOs, OpenAPI documentation, MockMvc tests, and
-   Postman collection as needed.
+   data access.
+4. Add focused tests with the test profile and H2; do not require a local PostgreSQL.
+5. If the data is exposed over HTTP, update DTOs, OpenAPI, MockMvc tests, Postman and README.
 6. Run targeted tests and a Maven package/compile.
-7. Review every `.github/skills/*/SKILL.md`; update all skills affected by the data model or shared
-   conventions. Update `README.md` and relevant schema, setup, API, or operational documentation.
+7. Review every `.github/skills/*/SKILL.md` and update the affected ones and related docs.
 
 ## Verification checklist
 
-- Production configuration continues to use PostgreSQL; tests activate the test configuration.
-- Transaction boundaries cover the intended write workflow without broadening transactions around
-  network calls unnecessarily.
-- Repository queries match the model and do not leak lazy entities to the web layer.
-- Duplicate, missing-reference, and not-found behavior is explicit.
-- No assumption of cross-database mirroring or distributed atomicity is introduced.
+- Production uses PostgreSQL; tests use the test configuration.
+- Transaction boundaries cover the intended writes without wrapping network calls unnecessarily.
+- Queries match the schema and do not leak lazy entities.
+- Duplicate, missing-reference and not-found behavior is explicit.
+- No cross-database mirroring or distributed atomicity is assumed.

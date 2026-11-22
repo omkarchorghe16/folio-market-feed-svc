@@ -2,29 +2,26 @@
 applyTo: "**/*.java"
 ---
 
+<!-- Managed by dev-standards (stacks/java-spring/instructions/spring-boot.instructions.md). Edit it in https://github.com/omkarchorghe16/dev-standards and run sync.sh; local edits are overwritten. -->
+
 # Spring Boot standards
 
-- This project uses Java 21 and Spring Boot 3.5.x. Preserve the Maven dependency-management model
-  and use existing dependencies unless a requirement cannot be met otherwise.
-- Use Spring-managed components with the narrowest appropriate stereotype (`@RestController`,
-  `@Service`, `@Component`, or `@Repository`).
-- Prefer constructor injection and immutable dependencies.
-- Use Spring configuration properties for configurable behavior; avoid reading environment variables
-  directly from business logic.
+- Use the existing Java 21, Spring Boot 3.x and Maven dependency-management setup. Use existing
+  dependencies unless a requirement cannot be met otherwise.
+- Use the narrowest Spring stereotype (`@RestController`, `@Service`, `@Component`, `@Repository`)
+  and constructor injection.
+- Bind runtime configuration through Spring properties; do not read environment variables from
+  business logic.
 - Map request bodies to typed DTOs and validate them with `@Valid` and Jakarta Validation.
-- Return intentional HTTP status codes and consistent error behavior; let established exception
-  handling propagate rather than hiding failures.
-- Keep blocking provider calls within configured timeouts and respect documented provider rate limits.
-- Use JPA annotations and repository methods consistent with existing entities; make upsert behavior
-  explicit and safe for repeated requests.
-- PostgreSQL is the application datasource; H2 is used by tests through
-  `src/test/resources/application.yml`. Do not imply or implement a production H2 mirror without
-  an explicitly approved architecture change.
-- Test web mappings with MockMvc and isolate provider/database behavior in appropriate tests.
-- Document every REST API in OpenAPI annotations and keep `/v3/api-docs` and Swagger UI current.
-- External-provider rate limits must be enforced before issuing calls. Count durable daily quotas
-  from persisted calls where possible so application restarts do not reset the daily allowance.
-- Use `postman/stock-news-scheduler.postman_collection.json` for API examples and assertions; never
-  include credentials in the collection or local environment export.
-- When behavior or functionality changes, review every skill in `.github/skills/` and update
-  affected skills, `README.md`, and directly related API/configuration/operations documentation.
+- Return intentional HTTP status codes and let the project's established exception handler shape
+  error responses; do not hide failures.
+- Keep JPA mappings and repository methods consistent with the actual schema. Make upserts explicit
+  and safe for repeated requests.
+- Keep blocking provider calls within configured timeouts and enforce provider rate limits before
+  issuing calls. Count durable daily quotas from persisted data so restarts do not reset them.
+- Document every REST endpoint with springdoc OpenAPI annotations and keep `/v3/api-docs`, Swagger
+  UI and the Postman collection accurate. Never put credentials in a Postman collection or
+  environment export.
+- Test web mappings with MockMvc and isolate provider and database behavior. Tests must not depend
+  on a developer's PostgreSQL server or a live external API.
+- Configuration and CORS changes take effect only after the service restarts.

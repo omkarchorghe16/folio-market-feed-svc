@@ -1,74 +1,53 @@
 ---
 name: spring-boot-provider-integration
-description: Add or change a third-party HTTP provider integration, including RestClient behavior, typed parsing, rate limits, persistence, safe errors, and tests.
+description: Add or change a third-party HTTP provider integration (market data, news, notification APIs) in a Spring Boot service, with typed parsing, bounded timeouts, rate limits, safe errors and tests.
 ---
+
+<!-- Managed by dev-standards (stacks/java-spring/skills/spring-boot-provider-integration/SKILL.md). Edit it in https://github.com/omkarchorghe16/dev-standards and run sync.sh; local edits are overwritten. -->
 
 # External provider integration workflow
 
-Use this skill for Finnhub, Yahoo Finance, Alpha Vantage, FMP, news providers, notification APIs,
-or another remote service.
+Use this skill for market-data, news, notification or any other remote HTTP API. The providers this
+repository already integrates, and their specific behavior, are described in
+`.github/instructions/project.instructions.md` and any project-local skill.
 
-## Project conventions
+## Conventions
 
-- Keep provider-specific HTTP and response parsing in that provider's client package/class; keep
-  orchestration, normalization, and persistence in a service.
-- Reuse the configured Spring `RestClient` bean from `RestClientConfig`, which applies the shared
-  timeout settings. Do not create clients with unbounded timeouts.
-- Bind provider URLs, credentials, limits, and feature switches using `AppProperties` or the
-  provider-specific configuration properties class. Document names/defaults in
-  `src/main/resources/application.yml`; keep real values in environment variables, the ignored
-  local `.env` used by Docker Compose, or the ignored root-level `application-secrets.yml` for direct
-  local runs. Treat the existing root-level `application-secrets.yml` as persistent developer-owned
-  configuration: never overwrite, regenerate, or relocate its values during routine changes.
-  `src/main/resources/application-local.yml` is tracked and must not contain actual credentials or
-  be edited to move/copy local secrets. Ensure the active profile does not override imported secrets
-  with empty placeholders; restart the app after editing the secrets file.
-- Normalize stock symbols once at the service boundary with the existing normalizer when applicable.
-- Enforce provider rate limits before issuing requests. Use persisted usage records for durable
-  quotas when the provider service already follows that pattern.
-- Map provider responses into typed models. Keep error/status translation close to the provider
-  client and propagate failures rather than returning empty success-shaped data.
-- Keep provider-specific HTTP APIs in dedicated controllers when separating them improves API
-  clarity. `GET /api/fmp/profiles?symbols=...` and `POST /api/fmp/profiles` share
-  `FmpProfileService.getProfiles`: a saved row whose `updated_date` is today (in
-  `fmp.profile-refresh-time-zone`) is served from PostgreSQL; any other symbol is fetched from FMP for
-  that symbol only and upserted immediately, keeping `id` and `created_date`. Key, US-exchange, and
-  quota checks run only when a fetch is needed.
-- NSE symbol lists (`india/nse`) are keyless CSV downloads via the `nseRestClient` bean (timeout
-  `nse.timeout-seconds`, browser-like `User-Agent`). `NseSymbolService` validates both files with
-  `NseSymbolCsvParser` (header-name based, quoted cells) before atomically replacing the stored copies
-  in `nse.storage-directory`; a failed download never deletes the previous lists. Search reads the
-  stored CSV files, caching parsed rows until a file's modification time changes.
-- US symbol lists (`us/nasdaq`) are keyless pipe-delimited downloads from Nasdaq Trader via the
-  `nasdaqRestClient` bean (timeout `nasdaq.timeout-seconds`). `NasdaqSymbolFileParser` finds columns by
-  header name, skips test issues, maps the `ETF` column to `type` and exchange codes to names, and
-  rejects a file without the closing `File Creation Time` line as truncated. `NasdaqSymbolService`
-  replaces both stored files only after both parse; search works like the NSE search.
-- Logs must not contain credentials, authorization headers, full credential-bearing URLs, raw
-  provider responses, business-summary text, or unsanitized exception details that can reveal them.
+- Keep provider HTTP and response parsing in that provider's client package/class; keep
+  orchestration, normalization and persistence in a service.
+- Reuse the project's configured `RestClient`/HTTP bean with its timeouts. Never create a client
+  with unbounded timeouts.
+- Bind provider URLs, credentials, limits and feature switches through typed configuration
+  properties and document names and defaults in `application.yml`. Keep real values in environment
+  variables or ignored local secrets files; never overwrite or relocate a developer's local secrets
+  file, and keep tracked profile files free of credentials.
+- Normalize symbols once at the service boundary with the existing normalizer.
+- Enforce rate limits before issuing requests; keep durable quotas in persisted usage records so a
+  restart does not reset them.
+- Map responses to typed models. Translate provider errors close to the client and propagate them;
+  never return empty success-shaped data for an upstream failure.
+- Replace stored downloaded data (files or rows) only after the new data has been fully parsed and
+  validated, so a failed download keeps the previous copy.
+- Never log credentials, authorization headers, credential-bearing URLs, raw provider responses or
+  unsanitized exception messages that can contain them.
 
 ## Implementation sequence
 
-1. Inspect the provider's properties, client, service, persistence model/repository, related tests,
-   and documented API limits.
-2. Add or update configuration with safe defaults and no committed credentials.
-3. Implement request construction, response parsing, and provider error mapping in the client.
-4. Put normalization, caching/quota checks, and persistence orchestration in the service, preserving
-   transaction boundaries and avoiding transactions around slow network calls unless required.
-5. Add deterministic tests using the existing `MockRestServiceServer`, WireMock, or service mocks.
-   Cover success parsing, empty/malformed responses, HTTP failure, missing configuration, and quota
-   boundaries as relevant. Never make live provider requests in tests.
-6. Update controller OpenAPI docs and Postman examples if the external integration is reachable
-   through a public endpoint.
-7. Run the provider-specific tests and then compile/package the application.
-8. Review every `.github/skills/*/SKILL.md`; update all skills affected by provider behavior or
-   shared conventions. Update `README.md` and directly related API, configuration, rate-limit, or
-   operational documentation.
+1. Inspect the provider's properties, client, service, persistence model, tests and documented API
+   limits.
+2. Add configuration with safe defaults and no committed credentials.
+3. Implement request construction, response parsing and error mapping in the client.
+4. Put normalization, caching/quota checks and persistence in the service; keep slow network calls
+   outside database transactions unless required.
+5. Add deterministic tests with `MockRestServiceServer`, WireMock or service mocks: success parsing,
+   empty/malformed responses, HTTP failures, missing configuration and quota boundaries.
+6. Update OpenAPI, Postman and README if the integration is reachable through a public endpoint.
+7. Run the provider tests, then compile/package.
+8. Review every `.github/skills/*/SKILL.md` and update the affected ones and related docs.
 
 ## Verification checklist
 
 - Timeout and retry behavior are bounded and intentional.
-- Rate limits and cache behavior match the provider plan and cannot be reset accidentally on restart
-  if the limit is meant to be durable.
-- Failure status is actionable and does not expose upstream payloads or credentials.
-- Tests verify mapping and error cases without relying on network access.
+- Rate limits and caching match the provider plan and survive restarts when meant to be durable.
+- Failures are actionable and do not expose upstream payloads or credentials.
+- Tests verify mapping and error cases without network access.
