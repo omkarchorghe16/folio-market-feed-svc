@@ -5,10 +5,10 @@ spring:
     # Optional, untracked local overrides. Keep property names in sync with application-secrets.yml.
     import: optional:file:./application-secrets.yml
   application:
-    name: stock-news-scheduler-svc
+    name: stock-folio-market-feed-svc
   datasource:
     # Local secrets-file properties or environment variables override these defaults.
-    # Shared with investment-management-svc (folio-pro): one folio_pro database, all tables in public.
+    # Shared with folio-portfolio-api (folio-pro): one folio_pro database, all tables in public.
     url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/folio_pro}
     driver-class-name: org.postgresql.Driver
     username: ${POSTGRES_USER:folio_pro}

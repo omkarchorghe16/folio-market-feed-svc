@@ -56,7 +56,7 @@ jobs:
         run: mvn --batch-mode package
 
       - name: Build Docker image
-        run: docker build --tag "news-scheduler-svc:${GITHUB_SHA}" .
+        run: docker build --tag "folio-market-feed-svc:${GITHUB_SHA}" .
 
       - name: Upload test reports
         if: always()
@@ -130,5 +130,5 @@ jobs:
       - name: Apply Kubernetes manifests
         run: |
           kubectl apply -f k8s/service.yaml -f k8s/ingress.yaml
-          sed "s|news-scheduler-svc:REPLACE_WITH_LOCAL_TAG|${{ env.REGISTRY }}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):${{ github.sha }}|" k8s/deployment.yaml | kubectl apply -f -
-          kubectl rollout status --namespace dev deployment/news-scheduler-svc --timeout=180s
+          sed "s|folio-market-feed-svc:REPLACE_WITH_LOCAL_TAG|${{ env.REGISTRY }}/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):${{ github.sha }}|" k8s/deployment.yaml | kubectl apply -f -
+          kubectl rollout status --namespace dev deployment/folio-market-feed-svc --timeout=180s

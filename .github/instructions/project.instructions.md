@@ -2,7 +2,7 @@
 applyTo: "**"
 ---
 
-# Project rules: news-scheduler-svc
+# Project rules: folio-market-feed-svc
 
 Repository-specific rules. The shared rules in the other `.github/instructions/` files (managed by
 dev-standards) also apply; where this file is more specific, it wins. Edit this file here.
@@ -32,7 +32,7 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
 - The database is the shared `folio_pro` PostgreSQL (`localhost:5432` from the host,
   `host.docker.internal:5432` from the Compose container; Compose does not run PostgreSQL). All
   tables of both services live in the `public` schema. Never alter or map the Flyway-managed tables
-  of `../invesment-management-svc` (`portfolios`, `holdings`, `watchlists_*`, `watchlist_items_*`,
+  of `../folio-portfolio-api` (`portfolios`, `holdings`, `watchlists_*`, `watchlist_items_*`,
   `user_preferences`), keep table names unique, and never suggest `flyway clean` on this database.
 - H2 for tests via `src/test/resources/application.yml`.
 - FMP profiles are upserted by unique symbol, keeping `id` and `created_date`; `updated_date` changes
@@ -80,4 +80,4 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
 
 - [ ] `mvn test` passes; no live provider or notification calls in tests.
 - [ ] If an endpoint used by the Angular app (`/api/fmp/*`, `/api/india/*`, `/api/us/*`, `/api/digest/*`) changed,
-      `../personal-wealth-management-angular/src/app/core/services/` is checked and updated.
+      `../folio-pro-ui/src/app/core/services/` is checked and updated.

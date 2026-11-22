@@ -1,11 +1,11 @@
-# The database is the shared folio_pro PostgreSQL (also used by investment-management-svc) running on
+# The database is the shared folio_pro PostgreSQL (also used by folio-portfolio-api) running on
 # the Mac host. This service keeps its tables in the public schema of that database.
 services:
   news-scheduler:
     build:
       context: .
       dockerfile: Dockerfile
-    image: news-scheduler-svc:local
+    image: folio-market-feed-svc:local
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -24,7 +24,7 @@ fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 secret_file="${APP_SECRETS_FILE:-${repo_root}/application-secrets.yml}"
 deployment_file="${repo_root}/k8s/deployment.yaml"
-image="news-scheduler-svc:$1"
+image="folio-market-feed-svc:$1"
 port_forward_pid=""
 port_forward_log=""
 
@@ -66,15 +66,15 @@ kubectl apply \
   -f "${repo_root}/k8s/service.yaml" \
   -f "${repo_root}/k8s/ingress.yaml"
 
-sed "s|news-scheduler-svc:REPLACE_WITH_LOCAL_TAG|${image}|" "$deployment_file" \
+sed "s|folio-market-feed-svc:REPLACE_WITH_LOCAL_TAG|${image}|" "$deployment_file" \
   | kubectl apply -f -
 
-kubectl rollout restart --namespace dev deployment/news-scheduler-svc
-kubectl rollout status --namespace dev deployment/news-scheduler-svc
+kubectl rollout restart --namespace dev deployment/folio-market-feed-svc
+kubectl rollout status --namespace dev deployment/folio-market-feed-svc
 
 port_forward_log="$(mktemp)"
 kubectl port-forward --address 127.0.0.1 --namespace dev \
-  service/news-scheduler-svc 18080:80 >"$port_forward_log" 2>&1 &
+  service/folio-market-feed-svc 18080:80 >"$port_forward_log" 2>&1 &
 port_forward_pid=$!
 
 for attempt in {1..30}; do

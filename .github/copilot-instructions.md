@@ -1,4 +1,4 @@
-# Repository instructions: news-scheduler-svc
+# Repository instructions: folio-market-feed-svc
 
 Spring Boot (Java 21, Maven) service on port 8082. It fetches market data and news from external
 providers (FMP, Finnhub, Yahoo, Alpha Vantage for US; Tapetide and Upstox for India), stores it in

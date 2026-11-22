@@ -154,12 +154,12 @@ local development values before running.
 #### Shared `folio_pro` database
 
 This service shares one PostgreSQL database, `folio_pro`, with
-[investment-management-svc](https://github.com/omkarchorghe16/invesment-management-svc) (folio-pro).
+[folio-portfolio-api](https://github.com/omkarchorghe16/folio-portfolio-api) (folio-pro).
 Both applications keep their tables together in the `public` schema:
 
 | Tables | Owner application | Managed by |
 | --- | --- | --- |
-| `portfolios`, `holdings`, `watchlists_*`, `watchlist_items_*`, `user_preferences`, `flyway_schema_history` | investment-management-svc | Flyway migrations (`ddl-auto: validate`) |
+| `portfolios`, `holdings`, `watchlists_*`, `watchlist_items_*`, `user_preferences`, `flyway_schema_history` | folio-portfolio-api | Flyway migrations (`ddl-auto: validate`) |
 | `sectors`, `stocks`, `sent_articles`, `fmp_*`, `finnhub_*`, `yahoo_*`, `alpha_vantage_*` | this service | Hibernate `ddl-auto: update` |
 
 Because the schema is shared:
@@ -303,7 +303,7 @@ scheduled digest job; increasing replicas can send duplicate digests.
 
    ```bash
    mvn --batch-mode -DskipTests package
-   docker build -t news-scheduler-svc:local .
+   docker build -t folio-market-feed-svc:local .
    ```
 
 3. Add your actual PostgreSQL credentials and provider/notification keys to the ignored
@@ -344,7 +344,7 @@ scheduled digest job; increasing replicas can send duplicate digests.
    ```bash
    bash scripts/deploy-local-k8s.sh local
    kubectl get pods,services,ingress -n dev
-   kubectl logs -n dev deployment/news-scheduler-svc
+   kubectl logs -n dev deployment/folio-market-feed-svc
    ```
 
    Rebuild the image before redeploying after application changes. On every deployment, the helper
@@ -358,7 +358,7 @@ scheduled digest job; increasing replicas can send duplicate digests.
    `http://dev.news-scheduler.example.com`. Otherwise, access the service without ingress:
 
    ```bash
-   kubectl port-forward -n dev service/news-scheduler-svc 8080:80
+   kubectl port-forward -n dev service/folio-market-feed-svc 8080:80
    ```
 
    Then use `http://localhost:8080`. Readiness and liveness endpoints are at
@@ -367,8 +367,8 @@ scheduled digest job; increasing replicas can send duplicate digests.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/omkarchorghe16/news-scheduler-svc.git
-cd news-scheduler-svc
+git clone https://github.com/omkarchorghe16/folio-market-feed-svc.git
+cd folio-market-feed-svc
 ```
 
 ### 2. Set Up Environment Variables
@@ -842,7 +842,7 @@ The application reads and writes data through Spring Data JPA repositories in
 `model`, using the PostgreSQL datasource. Hibernate creates or updates
 the PostgreSQL tables from the JPA entities at startup. H2 is used only for automated tests.
 
-The `folio_pro` database and `folio_pro` role are created by investment-management-svc's setup; this
+The `folio_pro` database and `folio_pro` role are created by folio-portfolio-api's setup; this
 service needs no database of its own. If you are setting up from scratch:
 
 ```sql

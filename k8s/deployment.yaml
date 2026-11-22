@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: news-scheduler-svc
+  name: folio-market-feed-svc
   namespace: dev
 spec:
   # Keep one replica: each instance runs the scheduled digest job.
   replicas: 1
   selector:
     matchLabels:
-      app: news-scheduler-svc
+      app: folio-market-feed-svc
   template:
     metadata:
       labels:
-        app: news-scheduler-svc
+        app: folio-market-feed-svc
     spec:
       containers:
         - name: app
-          image: news-scheduler-svc:REPLACE_WITH_LOCAL_TAG
+          image: folio-market-feed-svc:REPLACE_WITH_LOCAL_TAG
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

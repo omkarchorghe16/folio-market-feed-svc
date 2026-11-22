@@ -98,7 +98,7 @@ public class TapetideClient {
         ObjectNode params = init.putObject("params");
         params.put("protocolVersion", PROTOCOL_VERSION);
         params.putObject("capabilities");
-        params.putObject("clientInfo").put("name", "news-scheduler-svc").put("version", "1.0.0");
+        params.putObject("clientInfo").put("name", "folio-market-feed-svc").put("version", "1.0.0");
 
         sessionId = null;
         RawResponse response = post(init);
