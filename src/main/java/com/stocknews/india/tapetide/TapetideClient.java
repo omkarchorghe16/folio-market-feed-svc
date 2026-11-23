@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 /**
  * Calls Tapetide tools over its MCP (JSON-RPC over HTTP) endpoint. Tapetide's REST API serves the same
@@ -31,6 +32,10 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>Auth: the personal token ({@code tpt_rt_...}) is a refresh token. It is exchanged at
  * {@code POST /token} for a ~1 hour access token, refreshed shortly before expiry or after a 401.
+ *
+ * <p>Pause: after a quota or plan-expired answer (HTTP 429, or a tool error such as "Your free Tapetide access is now
+ * over") or rejected credentials, no calls are made for {@code tapetide.pause-minutes} (or the 429's Retry-After);
+ * {@link #callTool} throws {@link TapetidePausedException} at once and callers serve saved rows.
  */
 @Component
 @Slf4j
@@ -38,6 +43,9 @@ public class TapetideClient {
     private static final String PROTOCOL_VERSION = "2025-06-18";
     private static final Duration EXPIRY_MARGIN = Duration.ofMinutes(5);
     private static final String TOKEN_HELP = "Get a free token at https://tapetide.com/settings/tokens and set TAPETIDE_TOKEN";
+    /** Tool-error texts that mean the account cannot make calls (quota used up or free access over), not a bad symbol. */
+    private static final Pattern ACCOUNT_LIMIT_TEXT = Pattern.compile(
+            "(?i)access is now over|upgrade your plan|rate limit|limit reached|quota|daily limit");
 
     private final RestClient restClient;
     private final TapetideProperties tapetideProperties;
@@ -49,6 +57,8 @@ public class TapetideClient {
     private Instant accessTokenExpiresAt = Instant.EPOCH;
     private String sessionId;
     private boolean initialized;
+    private Instant pausedUntil = Instant.EPOCH;
+    private String pauseReason;
 
     private record RawResponse(int status, HttpHeaders headers, String body) {
     }
@@ -68,10 +78,14 @@ public class TapetideClient {
     }
 
     /**
-     * Calls one Tapetide tool and returns its JSON result. Each call uses one of the free plan's
-     * 50 daily calls; {@link TapetideStockService} avoids repeat calls by serving fresh rows from PostgreSQL.
+     * Calls one Tapetide tool and returns its JSON result. Each call counts against the plan's daily calls;
+     * {@link TapetideStockService} avoids repeat calls by serving fresh rows from PostgreSQL. Throws
+     * {@link TapetidePausedException} without a network call while paused.
      */
     public synchronized JsonNode callTool(String tool, Map<String, Object> arguments) {
+        if (isPaused()) {
+            throw new TapetidePausedException(pausedUntil, pauseReason);
+        }
         ObjectNode request = rpc("tools/call");
         request.putObject("params").put("name", tool).set("arguments", objectMapper.valueToTree(arguments));
 
@@ -82,6 +96,27 @@ public class TapetideClient {
             response = postWithSession(request);
         }
         return toolResult(tool, response);
+    }
+
+    /** Whether calls are being made, and if not, until when and why. */
+    public synchronized TapetideAvailability availability() {
+        return isPaused()
+                ? new TapetideAvailability(false, pausedUntil, pauseReason)
+                : new TapetideAvailability(true, null, null);
+    }
+
+    private boolean isPaused() {
+        return clock.instant().isBefore(pausedUntil);
+    }
+
+    private void pause(Duration duration, String reason) {
+        pausedUntil = clock.instant().plus(duration);
+        pauseReason = reason;
+        log.warn("Tapetide calls paused until {}: {}", pausedUntil, reason);
+    }
+
+    private Duration defaultPause() {
+        return Duration.ofMinutes(Math.max(tapetideProperties.getPauseMinutes(), 1));
     }
 
     private RawResponse postWithSession(ObjectNode request) {
@@ -164,6 +199,7 @@ public class TapetideClient {
         }
         if (response.status() >= 400) {
             log.error("Tapetide token refresh failed with HTTP {}: {}", response.status(), abbreviate(response.body()));
+            pause(defaultPause(), "Tapetide rejected the token (HTTP " + response.status() + ")");
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Tapetide token was rejected; check TAPETIDE_TOKEN. " + TOKEN_HELP);
         }
@@ -206,6 +242,11 @@ public class TapetideClient {
         String text = firstText(result);
         if (result.path("isError").asBoolean(false)) {
             log.error("Tapetide {} reported a tool error: {}", tool, abbreviate(text));
+            if (text != null && ACCOUNT_LIMIT_TEXT.matcher(text).find()) {
+                pause(defaultPause(), abbreviate(text));
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                        "Tapetide plan or quota limit: " + abbreviate(text));
+            }
             HttpStatus status = text != null && text.toLowerCase().contains("not found")
                     ? HttpStatus.NOT_FOUND : HttpStatus.BAD_GATEWAY;
             throw new ResponseStatusException(status, "Tapetide " + tool + ": " + abbreviate(text));
@@ -226,17 +267,26 @@ public class TapetideClient {
     private ResponseStatusException failure(RawResponse response, String what) {
         if (response.status() == HttpStatus.TOO_MANY_REQUESTS.value()) {
             String retryAfter = response.headers().getFirst(HttpHeaders.RETRY_AFTER);
-            log.error("{}: Tapetide rate limit reached (free plan: 50 calls/day); retry after {}", what, retryAfter);
+            log.error("{}: Tapetide rate limit reached; retry after {}", what, retryAfter);
+            pause(retryAfterOrDefault(retryAfter), "Tapetide rate limit reached (HTTP 429)");
             return new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                     "Tapetide rate limit reached" + (retryAfter == null ? "" : "; retry after " + retryAfter + "s"));
         }
         if (response.status() == HttpStatus.UNAUTHORIZED.value() || response.status() == HttpStatus.FORBIDDEN.value()) {
             log.error("{}: HTTP {} {}", what, response.status(), abbreviate(response.body()));
+            pause(defaultPause(), "Tapetide rejected the credentials (HTTP " + response.status() + ")");
             return new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Tapetide rejected the credentials. " + TOKEN_HELP);
         }
         log.error("{}: HTTP {} {}", what, response.status(), abbreviate(response.body()));
         return new ResponseStatusException(HttpStatus.BAD_GATEWAY, what + " (HTTP " + response.status() + ")");
+    }
+
+    private Duration retryAfterOrDefault(String retryAfter) {
+        if (retryAfter != null && retryAfter.trim().matches("\\d{1,7}")) {
+            return Duration.ofSeconds(Math.max(Long.parseLong(retryAfter.trim()), 60));
+        }
+        return defaultPause();
     }
 
     private ObjectNode rpc(String method) {

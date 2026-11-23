@@ -137,7 +137,8 @@ make unrelated skill edits just to create churn.
 
 7. **Tapetide** (optional, for India/NSE fundamentals and profiles)
    - Create a token: https://tapetide.com/settings/tokens
-   - Set `TAPETIDE_TOKEN` (or `tapetide.token` in `application-secrets.yml`). Free plan: 50 calls/day
+   - Set `TAPETIDE_TOKEN` (or `tapetide.token` in `application-secrets.yml`). Free plan: 100 calls/day
+     for the first 7 days after signup, then a paid plan
 
 8. **Upstox** (optional, for India live quotes and candles)
    - Create a read-only Analytics Token: https://account.upstox.com/developer/apps (Analytics tab)
@@ -493,6 +494,12 @@ per-symbol rule:
 container runs agree on the date. Each refreshed symbol is saved as soon as it is fetched, so if a later
 symbol fails, earlier ones are kept. The API key, US-exchange, and quota checks apply only when at least
 one symbol needs an FMP call.
+
+When the daily limit cannot cover every stale symbol (2 FMP calls each), the service fetches as many as
+fit, symbols with no saved row first and then the oldest rows, and returns the **saved row unchanged** for
+the rest. A symbol whose refresh fails also keeps its saved row. Symbols with no saved row that could not
+be fetched are left out. The request fails with `429` only when the limit is used up and none of the
+requested symbols is saved.
 FMP Basic/free accounts are US-exchange-only; requests containing `.NS` or `.BO` are rejected by
 default. Set `FMP_US_EXCHANGES_ONLY=false` only when your FMP plan supports those symbols.
 Every FMP profile record includes the complete raw provider record in `raw_payload`.
@@ -547,10 +554,19 @@ All India endpoints are under `/api/india`. Tapetide responses are saved to `tap
 (and quotes to `tapetide_stock_quotes`) and served from PostgreSQL while they are fresher than
 `tapetide.quote-refresh-minutes` (default 60) or `tapetide.data-refresh-minutes` (default 1440). A
 symbol Tapetide does not know returns **204 No Content** and is logged, not treated as an error.
+
+When Tapetide answers with a quota or plan-expired message (for example "Your free Tapetide access is now
+over"), a `429`, or rejects the token, the service **pauses Tapetide calls** for `tapetide.pause-minutes`
+(`TAPETIDE_PAUSE_MINUTES`, default 180; a `429` with `Retry-After` uses that delay). While paused, no request
+reaches Tapetide: each endpoint returns the saved row, however old, or `204` when nothing is saved. The pause
+is logged once as a warning. `GET /api/india/tapetide/status` reports it. The Folio Pro India page then takes
+prices from the Upstox quotes endpoint and keeps the saved Tapetide fundamentals. Restart the service after
+upgrading the plan or changing the token to end a pause early.
 Symbols are bare NSE tickers (`RELIANCE`, not `RELIANCE.NS`).
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET | `/api/india/tapetide/status` | `available`, `pausedUntil`, `reason`: whether Tapetide calls are paused (no Tapetide call) |
 | GET | `/api/india/tapetide/search?query=&limit=` | Find a symbol by name, symbol, BSE code or ISIN (not saved) |
 | GET | `/api/india/tapetide/quote/{symbol}` | Price, P/E (TTM), P/B, 52-week high/low |
 | GET | `/api/india/tapetide/quotes?symbols=A,B` | Quotes for up to 200 symbols; unknown symbols are skipped |

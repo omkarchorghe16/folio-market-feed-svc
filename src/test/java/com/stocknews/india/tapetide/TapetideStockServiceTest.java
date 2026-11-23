@@ -153,6 +153,20 @@ class TapetideStockServiceTest {
         verify(datasetRepository, never()).saveAndFlush(any());
     }
 
+    @Test
+    void pausedClientServesStaleSavedProfileWithoutSaving() {
+        TapetideStockDataset saved = new TapetideStockDataset();
+        saved.setSymbol("TCS");
+        saved.setUpdatedDate(NOW.minusDays(3));
+        when(datasetRepository.findBySymbolAndDatasetAndRequestParams("TCS", "profile", ""))
+                .thenReturn(Optional.of(saved));
+        when(client.callTool(eq("get_company_profile"), anyMap()))
+                .thenThrow(new TapetidePausedException(Instant.parse("2026-11-14T19:00:00Z"), "free access is over"));
+
+        assertSame(saved, service.getProfile("TCS", null).orElseThrow());
+        verify(datasetRepository, never()).saveAndFlush(any());
+    }
+
     private static TapetideStockQuote quote(String symbol, LocalDateTime updated) {
         TapetideStockQuote quote = new TapetideStockQuote();
         quote.setSymbol(symbol);

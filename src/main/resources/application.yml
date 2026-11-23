@@ -43,7 +43,8 @@ fmp:
   profile-refresh-time-zone: ${FMP_PROFILE_REFRESH_TIME_ZONE:America/Chicago}
 
 tapetide:
-  # NSE/BSE fundamentals. Free plan: 50 calls/day. Token from https://tapetide.com/settings/tokens
+  # NSE/BSE fundamentals. Free plan: 100 calls/day for the first 7 days after signup, then a paid plan.
+  # Token from https://tapetide.com/settings/tokens
   # Keep the token in application-secrets.yml or set TAPETIDE_TOKEN in the environment.
   base-url: ${TAPETIDE_BASE_URL:https://mcp.tapetide.com}
   token: ${TAPETIDE_TOKEN:}
@@ -51,6 +52,8 @@ tapetide:
   quote-refresh-minutes: ${TAPETIDE_QUOTE_REFRESH_MINUTES:60}
   data-refresh-minutes: ${TAPETIDE_DATA_REFRESH_MINUTES:1440}
   timeout-seconds: ${TAPETIDE_TIMEOUT_SECONDS:30}
+  # After a quota, plan-expired or rejected-token answer, skip Tapetide calls for this long and serve saved rows.
+  pause-minutes: ${TAPETIDE_PAUSE_MINUTES:180}
 
 upstox:
   # Live quotes and candles. Use the free read-only Analytics Token (valid ~1 year) from

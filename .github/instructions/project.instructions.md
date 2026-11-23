@@ -39,7 +39,9 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
   on each refresh. GET and POST `/api/fmp/profiles` serve rows updated today (in
   `fmp.profile-refresh-time-zone`) from PostgreSQL and fetch other symbols from FMP one at a time,
   saving each as soon as it is fetched. Key, US-exchange and quota checks run only when a fetch is
-  needed.
+  needed. When the quota cannot cover every stale symbol, as many as fit are fetched (unsaved symbols
+  first, then the oldest rows) and the rest are returned from their saved rows; `429` only when nothing
+  can be returned. A failed refresh keeps the saved row.
 - Bulk stock-symbol ingestion (`POST /api/stock-symbols`, needs `sectorId` and non-empty `tickers`)
   delegates to `StockService.createBulk`: symbols are normalized, existing tickers in the same
   sector are skipped, and new records are returned.
@@ -48,6 +50,11 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
 
 - FMP, Finnhub, Yahoo and Alpha Vantage (US); Tapetide and Upstox (India). Reuse the `RestClient`
   from `RestClientConfig`. Durable daily quotas are counted from persisted calls.
+- Tapetide: `TapetideClient` pauses all calls for `tapetide.pause-minutes` (or a 429's Retry-After) after a
+  quota/plan-expired tool error, a 429 or rejected credentials, and throws `TapetidePausedException`
+  without a network call meanwhile. `TapetideStockService` then serves saved rows and logs the skip at DEBUG;
+  `GET /api/india/tapetide/status` reports the pause. The pause is in memory, so a restart ends it.
+  The Angular India page uses `GET /api/india/upstox/quotes` as its price fallback.
 - NSE symbol lists (`india/nse`): keyless CSV downloads through `nseRestClient`
   (`nse.timeout-seconds`, browser-like `User-Agent`). `NseSymbolService` validates both files with
   `NseSymbolCsvParser` before atomically replacing the copies in `nse.storage-directory`; search

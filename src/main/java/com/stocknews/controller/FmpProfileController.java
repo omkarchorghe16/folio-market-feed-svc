@@ -38,12 +38,13 @@ public class FmpProfileController {
     @Operation(summary = "Get FMP stock profiles",
             description = "Returns one profile per symbol in request order. Profiles updated today are read from "
                     + "PostgreSQL; any symbol not updated today (or not saved yet) is fetched from FMP for that "
-                    + "symbol only, upserted, and returned.")
+                    + "symbol only, upserted, and returned. If the daily quota cannot cover every such symbol, the rest "
+                    + "are returned from their saved rows.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "FMP stock profiles"),
             @ApiResponse(responseCode = "400", description = "Missing or invalid symbol list, or non-US symbol on the Basic plan"),
             @ApiResponse(responseCode = "404", description = "FMP returned no profile for a symbol"),
-            @ApiResponse(responseCode = "429", description = "FMP daily request quota exceeded"),
+            @ApiResponse(responseCode = "429", description = "FMP daily request quota used up and none of the symbols is saved yet"),
             @ApiResponse(responseCode = "503", description = "FMP API key is not configured"),
             @ApiResponse(responseCode = "502", description = "FMP request failed")
     })
@@ -60,12 +61,13 @@ public class FmpProfileController {
     @Operation(summary = "Get FMP stock profiles (symbols in a JSON body)",
             description = "Same as GET with a JSON body: profiles updated today are read from PostgreSQL; any symbol "
                     + "not updated today (or not saved yet) is fetched from FMP for that symbol only, upserted by "
-                    + "symbol, and returned.")
+                    + "symbol, and returned. If the daily quota cannot cover every such symbol, the rest are returned "
+                    + "from their saved rows.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "FMP stock profiles"),
             @ApiResponse(responseCode = "400", description = "Invalid symbol list or non-US symbol on the Basic plan"),
             @ApiResponse(responseCode = "404", description = "FMP returned no profile for a symbol"),
-            @ApiResponse(responseCode = "429", description = "FMP daily request quota exceeded"),
+            @ApiResponse(responseCode = "429", description = "FMP daily request quota used up and none of the symbols is saved yet"),
             @ApiResponse(responseCode = "503", description = "FMP API key is not configured"),
             @ApiResponse(responseCode = "502", description = "FMP request failed")
     })

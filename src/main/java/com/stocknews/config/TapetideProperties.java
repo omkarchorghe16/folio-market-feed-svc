@@ -5,7 +5,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * Tapetide (NSE/BSE fundamentals). Free plan: 50 tool calls per day.
+ * Tapetide (NSE/BSE fundamentals). The free plan covers 100 tool calls a day for the first 7 days after signup;
+ * after that a paid plan is needed.
  * Get a personal token (starts with {@code tpt_rt_}) at https://tapetide.com/settings/tokens.
  */
 @Component
@@ -21,4 +22,9 @@ public class TapetideProperties {
     /** A saved profile/financials/shareholding/forecasts/history row younger than this is served from PostgreSQL. */
     private int dataRefreshMinutes = 1440;
     private int timeoutSeconds = 30;
+    /**
+     * After a quota, plan-expired or rejected-credentials answer, no Tapetide calls are made for this long (saved rows
+     * are served instead). A 429 with Retry-After uses that delay instead.
+     */
+    private int pauseMinutes = 180;
 }

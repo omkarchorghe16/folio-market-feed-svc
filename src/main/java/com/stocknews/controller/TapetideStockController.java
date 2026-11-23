@@ -1,6 +1,7 @@
 package com.stocknews.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.stocknews.dto.TapetideStatusResponse;
 import com.stocknews.india.tapetide.TapetideStockService;
 import com.stocknews.model.TapetideStockDataset;
 import com.stocknews.model.TapetideStockQuote;
@@ -25,7 +26,8 @@ import java.util.Optional;
 
 /**
  * Indian (NSE/BSE) fundamentals from Tapetide, saved to PostgreSQL with created/updated dates
- * (free plan: 50 calls/day; fresh rows are served from the database).
+ * (fresh rows are served from the database). After a quota or plan-expired answer the service pauses Tapetide
+ * calls for a while and serves saved rows; {@code GET /status} reports the pause.
  *
  * <p>Bad symbols, bad options and provider failures never produce an error response: they are logged
  * with details and skipped. Single-symbol endpoints return 204 when there is nothing to return.
@@ -39,6 +41,14 @@ import java.util.Optional;
 public class TapetideStockController {
 
     private final TapetideStockService tapetideStockService;
+
+    @GetMapping("/status")
+    @Operation(summary = "Whether Tapetide calls are being made",
+            description = "available=false while calls are paused after a quota, plan-expired or rejected-token "
+                    + "answer; saved rows are served meanwhile. No Tapetide call is made.")
+    public TapetideStatusResponse getStatus() {
+        return TapetideStatusResponse.from(tapetideStockService.getAvailability());
+    }
 
     @GetMapping("/search")
     @Operation(summary = "Find an NSE/BSE symbol by company name, symbol, BSE code or ISIN (1 Tapetide call; not saved)")
@@ -118,7 +128,7 @@ public class TapetideStockController {
 
     private static <T> ResponseEntity<T> okOrNoContent(Optional<T> result, String dataName, String symbol) {
         if (result.isEmpty()) {
-            log.warn("{} for '{}': nothing to return (see the error logged above); responding 204", dataName, symbol);
+            log.warn("{} for '{}': nothing saved and nothing fetched; responding 204", dataName, symbol);
             return ResponseEntity.noContent().build();
         }
         return ResponseEntity.ok(result.get());
