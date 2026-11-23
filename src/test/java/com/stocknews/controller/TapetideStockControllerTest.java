@@ -1,5 +1,6 @@
 package com.stocknews.controller;
 
+import com.stocknews.india.tapetide.TapetideAvailability;
 import com.stocknews.india.tapetide.TapetideStockService;
 import com.stocknews.model.TapetideStockQuote;
 import org.junit.jupiter.api.Test;
@@ -9,6 +10,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -69,5 +71,17 @@ class TapetideStockControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(tapetideStockService).getFinancials("TCS", "ratios", null);
+    }
+
+    @Test
+    void getStatusReportsPauseWithoutCallingTapetide() throws Exception {
+        when(tapetideStockService.getAvailability()).thenReturn(new TapetideAvailability(false,
+                Instant.parse("2026-11-23T06:30:00Z"), "Your free Tapetide access is now over."));
+
+        mockMvc.perform(get("/api/india/tapetide/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(false))
+                .andExpect(jsonPath("$.pausedUntil").value("2026-11-23T06:30:00Z"))
+                .andExpect(jsonPath("$.reason").value("Your free Tapetide access is now over."));
     }
 }

@@ -704,6 +704,15 @@
       "description": "NSE/BSE data saved to PostgreSQL with createdDate/updatedDate. Tapetide = fundamentals (free: 50 calls/day; fresh rows served from the database). Upstox = live quotes and candles. Wrong symbols are logged and skipped, never returned as errors.",
       "item": [
         {
+          "name": "Tapetide - Status (paused or available)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/india/tapetide/status",
+            "description": "Whether Tapetide calls are paused after a quota, plan-expired or rejected-token answer (available, pausedUntil, reason). Makes no Tapetide call."
+          }
+        },
+        {
           "name": "Tapetide - Search Symbol (not saved)",
           "event": [
             {
@@ -722,7 +731,7 @@
             "method": "GET",
             "header": [],
             "url": "{{url}}/api/india/tapetide/search?query=reliance&limit=5",
-            "description": "Find an NSE/BSE symbol by company name, symbol, BSE code or ISIN. Uses 1 Tapetide call (free plan: 50/day). Not saved."
+            "description": "Find an NSE/BSE symbol by company name, symbol, BSE code or ISIN. Uses 1 Tapetide call. Not saved."
           },
           "response": []
         },

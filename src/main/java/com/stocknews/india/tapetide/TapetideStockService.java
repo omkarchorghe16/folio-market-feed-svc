@@ -30,7 +30,7 @@ import java.util.stream.Collectors;
 /**
  * NSE/BSE data from Tapetide, saved to PostgreSQL with created/updated dates.
  *
- * <p>Rows refreshed recently are served from the database to save the free plan's 50 calls/day.
+ * <p>Rows refreshed recently are served from the database to save the plan's daily calls.
  * Nothing here throws for a bad symbol or a Tapetide failure: the problem is logged with details,
  * the last saved row (if any) is returned instead, and other symbols carry on.
  */
@@ -67,6 +67,11 @@ public class TapetideStockService {
     }
 
     /** Symbol search is not stock data, so it is not saved. Returns an empty array on any problem. */
+    /** Whether Tapetide calls are being made; while paused, saved rows are served instead. */
+    public TapetideAvailability getAvailability() {
+        return tapetideClient.availability();
+    }
+
     public JsonNode searchSymbols(String query, Integer limit) {
         if (query == null || query.isBlank()) {
             log.error("Tapetide search skipped: query is empty");
@@ -319,6 +324,11 @@ public class TapetideStockService {
     }
 
     private static void logSkip(String dataset, String symbol, ResponseStatusException exception) {
+        if (exception instanceof TapetidePausedException) {
+            // Logged once, as a warning, when the pause started; one line per symbol would flood the log.
+            log.debug("Tapetide {} skipped for {} while paused; returning saved row if any", dataset, symbol);
+            return;
+        }
         log.error("Tapetide {} skipped for {}: status={}, reason={}; returning saved row if any",
                 dataset, symbol, exception.getStatusCode().value(), exception.getReason());
     }

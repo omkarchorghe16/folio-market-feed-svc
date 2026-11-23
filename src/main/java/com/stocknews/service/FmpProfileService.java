@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +27,8 @@ import java.util.Objects;
 
 /**
  * Serves FMP company profiles from PostgreSQL, calling FMP only for symbols whose saved row was not
- * updated today (in {@code fmp.profile-refresh-time-zone}) or that are not saved yet.
+ * updated today (in {@code fmp.profile-refresh-time-zone}) or that are not saved yet, and only as many as the
+ * daily request limit allows; the rest are served from their saved rows.
  */
 @Service
 @Slf4j
@@ -59,7 +61,9 @@ public class FmpProfileService {
 
     /**
      * Returns one profile per requested symbol, in request order. Profiles updated today come from
-     * PostgreSQL; every other symbol is fetched from FMP, upserted, and returned.
+     * PostgreSQL; other symbols are fetched from FMP, upserted, and returned, as far as the daily quota allows.
+     * When the quota (or an FMP failure) leaves a symbol unrefreshed, its saved row is returned as it is; a symbol
+     * with no saved row is left out. Fails with 429 only when the quota is used up and nothing can be returned.
      */
     public synchronized List<FmpStockProfile> getProfiles(List<String> requestedSymbols) {
         List<String> symbols = StockSymbolNormalizer.normalize(requestedSymbols);
@@ -83,28 +87,61 @@ public class FmpProfileService {
 
         if (!symbolsToFetch.isEmpty()) {
             validateCanFetch(symbolsToFetch);
-            List<String> skipped = new ArrayList<>();
-            for (String symbol : symbolsToFetch) {
-                FmpStockProfile stored = profilesBySymbol.remove(symbol);
-                try {
-                    profilesBySymbol.put(symbol, fetchAndUpsert(symbol, stored));
-                } catch (ResponseStatusException exception) {
-                    // One bad symbol must not fail the whole request: log it and continue with the rest.
-                    skipped.add(symbol);
-                    log.error("Skipping FMP profile for {}: status={}, reason={}",
-                            symbol, exception.getStatusCode().value(), exception.getReason());
-                    if (exception.getStatusCode().value() == HttpStatus.TOO_MANY_REQUESTS.value()) {
-                        log.error("FMP rate limit hit; not fetching remaining symbols this request");
-                        break;
-                    }
-                }
+            int affordableSymbols = affordableSymbolCount();
+            List<String> symbolsWithinQuota = fetchOrder(symbolsToFetch, profilesBySymbol).stream()
+                    .limit(affordableSymbols)
+                    .toList();
+            if (symbolsWithinQuota.size() < symbolsToFetch.size()) {
+                log.warn("FMP daily request limit leaves room for {} of {} symbols; "
+                                + "returning saved profiles for the other {}",
+                        symbolsWithinQuota.size(), symbolsToFetch.size(),
+                        symbolsToFetch.size() - symbolsWithinQuota.size());
             }
-            if (!skipped.isEmpty()) {
-                log.warn("FMP profiles skipped for {} symbol(s): {}", skipped.size(), skipped);
+            fetchAndUpsertAll(symbolsWithinQuota, profilesBySymbol);
+            if (symbolsWithinQuota.isEmpty() && profilesBySymbol.isEmpty()) {
+                log.warn("FMP daily request limit reached and none of the {} requested symbols is saved",
+                        symbols.size());
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                        "FMP daily request limit reached; try again after the quota window resets");
             }
         }
-        // Symbols that could not be fetched are left out of the response.
+        // Symbols that could not be fetched and have no saved row are left out of the response.
         return symbols.stream().map(profilesBySymbol::get).filter(Objects::nonNull).toList();
+    }
+
+    /**
+     * Fetches each symbol in turn. A failed symbol keeps its saved row (if any) and does not stop the rest,
+     * except an FMP rate limit, which stops further calls in this request.
+     */
+    private void fetchAndUpsertAll(List<String> symbolsToFetch, Map<String, FmpStockProfile> profilesBySymbol) {
+        List<String> skipped = new ArrayList<>();
+        for (String symbol : symbolsToFetch) {
+            try {
+                profilesBySymbol.put(symbol, fetchAndUpsert(symbol, profilesBySymbol.get(symbol)));
+            } catch (ResponseStatusException exception) {
+                skipped.add(symbol);
+                log.error("Skipping FMP profile for {}: status={}, reason={}",
+                        symbol, exception.getStatusCode().value(), exception.getReason());
+                if (exception.getStatusCode().value() == HttpStatus.TOO_MANY_REQUESTS.value()) {
+                    log.error("FMP rate limit hit; not fetching remaining symbols this request");
+                    break;
+                }
+            }
+        }
+        if (!skipped.isEmpty()) {
+            log.warn("FMP profiles skipped for {} symbol(s): {}", skipped.size(), skipped);
+        }
+    }
+
+    /**
+     * Order in which stale symbols get the remaining quota: symbols with no saved row first (otherwise they
+     * would show nothing), then the oldest saved rows.
+     */
+    private static List<String> fetchOrder(List<String> symbolsToFetch, Map<String, FmpStockProfile> saved) {
+        Comparator<String> oldestFirst = Comparator.comparing(
+                (String symbol) -> saved.get(symbol) == null ? null : saved.get(symbol).getUpdatedDate(),
+                Comparator.nullsFirst(Comparator.naturalOrder()));
+        return symbolsToFetch.stream().sorted(oldestFirst).toList();
     }
 
     private boolean isUpdatedOn(FmpStockProfile profile, LocalDate day) {
@@ -122,11 +159,6 @@ public class FmpProfileService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "FMP Basic profiles support US-exchange symbols only");
         }
-        int dailyRequestLimit = fmpProperties.getDailyRequestLimit();
-        if (dailyRequestLimit < 1) {
-            throw new IllegalStateException("FMP daily request limit must be greater than zero");
-        }
-        checkDailyQuota(symbolsToFetch.size() * CALLS_PER_SYMBOL, dailyRequestLimit);
     }
 
     /**
@@ -171,22 +203,25 @@ public class FmpProfileService {
         }
     }
 
-    private void checkDailyQuota(int requestedCalls, int dailyRequestLimit) {
-        LocalDateTime now = LocalDateTime.now();
+    /** How many symbols the calls left in the rolling 24-hour window can pay for. */
+    private int affordableSymbolCount() {
+        int dailyRequestLimit = fmpProperties.getDailyRequestLimit();
+        if (dailyRequestLimit < 1) {
+            throw new IllegalStateException("FMP daily request limit must be greater than zero");
+        }
         long callsInLast24Hours;
         try {
-            callsInLast24Hours = apiCallRepository.countByCalledAtAfter(now.minusHours(24));
+            callsInLast24Hours = apiCallRepository.countByCalledAtAfter(LocalDateTime.now().minusHours(24));
         } catch (DataAccessException exception) {
             log.error("Failed to read FMP API usage from PostgreSQL:\n{}",
                     ExceptionLog.stackTrace(exception));
             throw exception;
         }
-        if (callsInLast24Hours + requestedCalls > dailyRequestLimit) {
-            ResponseStatusException exception = new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
-                    "FMP daily request limit reached; try again after the quota window resets");
-            log.error("FMP daily request limit reached ({} of {} calls used):\n{}",
-                    callsInLast24Hours, dailyRequestLimit, ExceptionLog.stackTrace(exception));
-            throw exception;
+        long remainingCalls = Math.max(dailyRequestLimit - callsInLast24Hours, 0);
+        if (remainingCalls < CALLS_PER_SYMBOL) {
+            log.warn("FMP daily request limit reached ({} of {} calls used in the last 24 hours)",
+                    callsInLast24Hours, dailyRequestLimit);
         }
+        return (int) (remainingCalls / CALLS_PER_SYMBOL);
     }
 }

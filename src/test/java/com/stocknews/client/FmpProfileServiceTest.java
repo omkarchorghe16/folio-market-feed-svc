@@ -171,7 +171,55 @@ class FmpProfileServiceTest {
     }
 
     @Test
-    void rejectsRequestsThatWouldExceedTheConfiguredDailyQuota() {
+    void servesSavedProfilesWithoutCallingFmpWhenQuotaIsUsedUp() {
+        FmpStockProfile aaplOld = profile("AAPL", NOW.minusDays(1));
+        FmpStockProfile msftToday = profile("MSFT", NOW.minusHours(1));
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL", "MSFT", "NVDA")))
+                .thenReturn(List.of(aaplOld, msftToday));
+        when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(250L);
+
+        List<FmpStockProfile> result = service.getProfiles(List.of("AAPL", "MSFT", "NVDA"));
+
+        assertEquals(List.of(aaplOld, msftToday), result);
+        verify(client, never()).fetchProfile(any());
+        verify(apiCallRepository, never()).saveAndFlush(any(FmpApiCall.class));
+    }
+
+    @Test
+    void fetchesOnlyAsManySymbolsAsQuotaAllowsUnsavedSymbolsFirst() {
+        FmpStockProfile aaplOld = profile("AAPL", NOW.minusDays(2));
+        FmpStockProfile msftOlder = profile("MSFT", NOW.minusDays(5));
+        FmpStockProfile nvdaNew = profile("NVDA", null);
+        FmpStockProfile msftFresh = profile("MSFT", null);
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL", "MSFT", "NVDA")))
+                .thenReturn(List.of(aaplOld, msftOlder));
+        // 246 of 250 used: room for 2 symbols (2 calls each).
+        when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(246L);
+        when(client.fetchProfile("NVDA")).thenReturn(nvdaNew);
+        when(client.fetchProfile("MSFT")).thenReturn(msftFresh);
+        when(profileRepository.saveAndFlush(any(FmpStockProfile.class))).thenAnswer(call -> call.getArgument(0));
+
+        List<FmpStockProfile> result = service.getProfiles(List.of("AAPL", "MSFT", "NVDA"));
+
+        assertEquals(List.of(aaplOld, msftFresh, nvdaNew), result);
+        verify(client, never()).fetchProfile("AAPL");
+        verify(apiCallRepository, times(4)).saveAndFlush(any(FmpApiCall.class));
+    }
+
+    @Test
+    void keepsSavedProfileWhenRefreshFails() {
+        FmpStockProfile aaplOld = profile("AAPL", NOW.minusDays(1));
+        when(profileRepository.findAllBySymbolIn(List.of("AAPL"))).thenReturn(List.of(aaplOld));
+        when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(0L);
+        when(client.fetchProfile("AAPL")).thenThrow(new ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_GATEWAY, "FMP profile lookup failed for AAPL"));
+
+        assertEquals(List.of(aaplOld), service.getProfiles(List.of("AAPL")));
+        verify(profileRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void rejectsWithTooManyRequestsWhenQuotaIsUsedUpAndNothingIsSaved() {
         when(profileRepository.findAllBySymbolIn(List.of("AAPL", "MSFT"))).thenReturn(List.of());
         when(apiCallRepository.countByCalledAtAfter(any())).thenReturn(249L);
 

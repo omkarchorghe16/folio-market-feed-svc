@@ -15,12 +15,16 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
@@ -34,6 +38,7 @@ class TapetideClientTest {
 
     private MockRestServiceServer server;
     private TapetideClient client;
+    private final MutableClock clock = new MutableClock(Instant.parse("2026-11-14T10:00:00Z"));
 
     @BeforeEach
     void setUp() {
@@ -41,8 +46,7 @@ class TapetideClientTest {
         server = MockRestServiceServer.bindTo(builder).build();
         TapetideProperties properties = new TapetideProperties();
         properties.setToken("tpt_rt_test");
-        client = new TapetideClient(builder.build(), properties, new ObjectMapper(),
-                Clock.fixed(Instant.parse("2026-11-14T10:00:00Z"), ZoneOffset.UTC));
+        client = new TapetideClient(builder.build(), properties, new ObjectMapper(), clock);
     }
 
     @Test
@@ -145,6 +149,61 @@ class TapetideClientTest {
         assertEquals(503, exception.getStatusCode().value());
     }
 
+    @Test
+    void pausesAfterPlanExpiredToolErrorAndMakesNoCallsUntilThePauseEnds() {
+        expectToken("access-1");
+        expectInitialize("access-1");
+        server.expect(requestTo(BASE + "/mcp"))
+                .andRespond(withSuccess("""
+                        {"jsonrpc":"2.0","id":3,"result":{"isError":true,"content":[{"type":"text",
+                         "text":"Your free Tapetide access is now over. To keep using Tapetide here, you need to upgrade your plan."}]}}
+                        """, MediaType.APPLICATION_JSON));
+
+        ResponseStatusException first = assertThrows(ResponseStatusException.class,
+                () -> client.callTool("get_stock_overview", Map.of("symbol", "TCS")));
+        assertEquals(429, first.getStatusCode().value());
+
+        // No server expectation is left, so any network call here would fail the test.
+        assertThrows(TapetidePausedException.class,
+                () -> client.callTool("get_stock_overview", Map.of("symbol", "INFY")));
+        TapetideAvailability availability = client.availability();
+        assertFalse(availability.available());
+        assertEquals(clock.instant().plus(Duration.ofMinutes(180)), availability.pausedUntil());
+        assertTrue(availability.reason().contains("access is now over"));
+        server.verify();
+
+        clock.advance(Duration.ofMinutes(181));
+        assertTrue(client.availability().available());
+    }
+
+    @Test
+    void pausesForRetryAfterOnRateLimit() {
+        expectToken("access-1");
+        expectInitialize("access-1");
+        server.expect(requestTo(BASE + "/mcp"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).header(HttpHeaders.RETRY_AFTER, "600"));
+
+        assertThrows(ResponseStatusException.class,
+                () -> client.callTool("get_stock_quote", Map.of("symbol", "TCS")));
+
+        assertEquals(clock.instant().plusSeconds(600), client.availability().pausedUntil());
+    }
+
+    @Test
+    void unknownSymbolDoesNotPauseCalls() {
+        expectToken("access-1");
+        expectInitialize("access-1");
+        server.expect(requestTo(BASE + "/mcp"))
+                .andRespond(withSuccess("""
+                        {"jsonrpc":"2.0","id":3,"result":{"isError":true,
+                         "content":[{"type":"text","text":"Symbol FOO not found"}]}}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThrows(ResponseStatusException.class, () -> client.callTool("get_stock_quote", Map.of("symbol", "FOO")));
+
+        assertTrue(client.availability().available());
+    }
+
     private void expectToken(String accessToken) {
         server.expect(requestTo(BASE + "/token"))
                 .andExpect(method(HttpMethod.POST))
@@ -163,5 +222,33 @@ class TapetideClientTest {
         server.expect(requestTo(BASE + "/mcp"))
                 .andExpect(jsonPath("$.method").value("notifications/initialized"))
                 .andRespond(withStatus(HttpStatus.ACCEPTED));
+    }
+
+    /** A clock the test can move forward, to check when a pause ends. */
+    private static final class MutableClock extends Clock {
+        private Instant now;
+
+        MutableClock(Instant start) {
+            now = start;
+        }
+
+        void advance(Duration duration) {
+            now = now.plus(duration);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
+        }
     }
 }
