@@ -650,6 +650,17 @@ code Nasdaq Trader adds is returned as its one-letter code. Symbols use Nasdaq T
 returned as published (`Apple Inc. - Common Stock`). Postman requests are in the "US Symbols (Nasdaq
 Trader)" folder.
 
+### Sectors by market
+
+`GET /api/sectors?market=US|INDIA` lists one market's sectors A to Z (`GET /api/sectors` lists both), and
+`POST /api/sectors` takes an optional `market` (default `US`). A name is stored once and can be offered for both markets
+(`is_us`, `is_india`). `scripts/seed-sectors.sql` adds the names already in `folio_pro`: sectors of saved FMP profiles for
+the US; India watchlist names and sectors of saved Tapetide profiles for India. It can be run again at any time:
+
+```bash
+psql -h localhost -U folio_pro -d folio_pro -v ON_ERROR_STOP=1 -f scripts/seed-sectors.sql
+```
+
 ### Adding Stock Symbols
 
 Add a list of ticker symbols to an existing sector. The service normalizes tickers, creates records

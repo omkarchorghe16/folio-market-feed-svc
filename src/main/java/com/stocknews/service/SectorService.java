@@ -5,6 +5,7 @@ import com.stocknews.dto.SectorResponse;
 import com.stocknews.exception.DuplicateResourceException;
 import com.stocknews.exception.ResourceNotFoundException;
 import com.stocknews.model.Sector;
+import com.stocknews.model.SectorMarket;
 import com.stocknews.repository.SectorRepository;
 import com.stocknews.repository.StockRepository;
 import org.springframework.stereotype.Service;
@@ -23,20 +24,31 @@ public class SectorService {
         this.stockRepository = stockRepository;
     }
 
+    /** A name that exists for the other market only is from now on offered for both. */
     @Transactional
     public SectorResponse create(SectorRequest request) {
         String name = request.sectorName().trim();
-        if (sectorRepository.existsBySectorNameIgnoreCase(name)) {
+        SectorMarket market = request.market() == null ? SectorMarket.US : request.market();
+        Sector sector = sectorRepository.findBySectorNameIgnoreCase(name).orElseGet(() -> newSector(name));
+        if (sector.isOfferedFor(market)) {
             throw new DuplicateResourceException("Sector already exists: " + name);
         }
-        Sector sector = new Sector();
-        sector.setSectorName(name);
+        sector.offerFor(market);
         return SectorResponse.from(sectorRepository.save(sector));
     }
 
     @Transactional(readOnly = true)
     public List<SectorResponse> findAll() {
         return sectorRepository.findAll().stream().map(SectorResponse::from).toList();
+    }
+
+    /** A to Z. */
+    @Transactional(readOnly = true)
+    public List<SectorResponse> findByMarket(SectorMarket market) {
+        List<Sector> sectors = market == SectorMarket.INDIA
+                ? sectorRepository.findByIndiaTrueOrderBySectorNameAsc()
+                : sectorRepository.findByUsTrueOrderBySectorNameAsc();
+        return sectors.stream().map(SectorResponse::from).toList();
     }
 
     @Transactional(readOnly = true)
@@ -65,6 +77,12 @@ public class SectorService {
                     "Sector '" + sector.getSectorName() + "' still has stocks. Delete or move them first.");
         }
         sectorRepository.delete(sector);
+    }
+
+    private static Sector newSector(String name) {
+        Sector sector = new Sector();
+        sector.setSectorName(name);
+        return sector;
     }
 
     private Sector getOrThrow(Integer id) {

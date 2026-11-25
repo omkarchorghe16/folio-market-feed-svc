@@ -22,6 +22,13 @@ public class Sector {
     @Column(name = "sector_name", nullable = false, unique = true, length = 100)
     private String sectorName;
 
+    /** The database default lets Hibernate add the column to existing rows, which are all US sectors. */
+    @Column(name = "is_us", nullable = false, columnDefinition = "boolean default true")
+    private boolean us;
+
+    @Column(name = "is_india", nullable = false, columnDefinition = "boolean default false")
+    private boolean india;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -43,6 +50,18 @@ public class Sector {
 
     public void setSectorName(String sectorName) {
         this.sectorName = sectorName;
+    }
+
+    public boolean isOfferedFor(SectorMarket market) {
+        return market == SectorMarket.INDIA ? india : us;
+    }
+
+    public void offerFor(SectorMarket market) {
+        if (market == SectorMarket.INDIA) {
+            india = true;
+        } else {
+            us = true;
+        }
     }
 
     public LocalDateTime getCreatedAt() {

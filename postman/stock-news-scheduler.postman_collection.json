@@ -151,6 +151,15 @@
           "response": []
         },
         {
+          "name": "List India Sectors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{url}}/api/sectors?market=INDIA"
+          },
+          "response": []
+        },
+        {
           "name": "Get Sector",
           "event": [
             {

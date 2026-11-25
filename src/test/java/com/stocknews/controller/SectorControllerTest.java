@@ -2,6 +2,7 @@ package com.stocknews.controller;
 
 import com.stocknews.dto.SectorRequest;
 import com.stocknews.dto.SectorResponse;
+import com.stocknews.model.SectorMarket;
 import com.stocknews.service.SectorService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,8 +35,8 @@ class SectorControllerTest {
 
     @Test
     void createReturnsCreatedResourceAndLocation() throws Exception {
-        when(sectorService.create(new SectorRequest("Technology")))
-                .thenReturn(new SectorResponse(7, "Technology", LocalDateTime.now()));
+        when(sectorService.create(new SectorRequest("Technology", null)))
+                .thenReturn(new SectorResponse(7, "Technology", List.of(SectorMarket.US), LocalDateTime.now()));
 
         mockMvc.perform(post("/api/sectors")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -49,7 +50,7 @@ class SectorControllerTest {
     @Test
     void findAllReturnsSectors() throws Exception {
         when(sectorService.findAll())
-                .thenReturn(List.of(new SectorResponse(7, "Technology", LocalDateTime.now())));
+                .thenReturn(List.of(new SectorResponse(7, "Technology", List.of(SectorMarket.US), LocalDateTime.now())));
 
         mockMvc.perform(get("/api/sectors"))
                 .andExpect(status().isOk())
@@ -57,9 +58,32 @@ class SectorControllerTest {
     }
 
     @Test
+    void findByMarketReturnsOnlyThatMarket() throws Exception {
+        when(sectorService.findByMarket(SectorMarket.INDIA))
+                .thenReturn(List.of(new SectorResponse(8, "Cement", List.of(SectorMarket.INDIA), LocalDateTime.now())));
+
+        mockMvc.perform(get("/api/sectors").param("market", "INDIA"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].sectorName").value("Cement"))
+                .andExpect(jsonPath("$[0].markets[0]").value("INDIA"));
+        mockMvc.perform(get("/api/sectors").param("market", "UK")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createPassesTheMarketOn() throws Exception {
+        when(sectorService.create(new SectorRequest("Cement", SectorMarket.INDIA)))
+                .thenReturn(new SectorResponse(8, "Cement", List.of(SectorMarket.INDIA), LocalDateTime.now()));
+
+        mockMvc.perform(post("/api/sectors").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sectorName\":\"Cement\",\"market\":\"INDIA\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.markets[0]").value("INDIA"));
+    }
+
+    @Test
     void findByIdDelegatesToService() throws Exception {
         when(sectorService.findById(7))
-                .thenReturn(new SectorResponse(7, "Technology", LocalDateTime.now()));
+                .thenReturn(new SectorResponse(7, "Technology", List.of(SectorMarket.US), LocalDateTime.now()));
 
         mockMvc.perform(get("/api/sectors/7"))
                 .andExpect(status().isOk())
@@ -70,8 +94,8 @@ class SectorControllerTest {
 
     @Test
     void updateReturnsUpdatedSector() throws Exception {
-        when(sectorService.update(7, new SectorRequest("Healthcare")))
-                .thenReturn(new SectorResponse(7, "Healthcare", LocalDateTime.now()));
+        when(sectorService.update(7, new SectorRequest("Healthcare", null)))
+                .thenReturn(new SectorResponse(7, "Healthcare", List.of(SectorMarket.US), LocalDateTime.now()));
 
         mockMvc.perform(put("/api/sectors/7")
                         .contentType(MediaType.APPLICATION_JSON)

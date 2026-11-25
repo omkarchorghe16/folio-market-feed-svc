@@ -86,5 +86,6 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
 ## Before finishing
 
 - [ ] `mvn test` passes; no live provider or notification calls in tests.
-- [ ] If an endpoint used by the Angular app (`/api/fmp/*`, `/api/india/*`, `/api/us/*`, `/api/digest/*`) changed,
+- [ ] If an endpoint used by the Angular app (`/api/fmp/*`, `/api/india/*`, `/api/us/*`, `/api/digest/*`,
+      `/api/sectors`, `/api/stocks`) changed,
       `../folio-pro-ui/src/app/core/services/` is checked and updated.
