@@ -81,8 +81,10 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
 
 - Postman: `postman/stock-news-scheduler.postman_collection.json` with `{{url}}` and the local
   environment; requests can have real side effects (digests, provider calls).
-- `.github/workflows/ci-cd.yml` tests, packages and builds a Docker image; it does not publish or
-  deploy. `k8s/` and `scripts/deploy-local-k8s.sh` are an optional single-replica Docker Desktop
+- `.github/workflows/ci-cd.yml` tests, packages and builds a Docker image on every push and pull request,
+  publishes it to GHCR from `main`, and deploys only when the repository variable `KUBE_DEPLOY_ENABLED` is
+  `true` (secrets `KUBE_CONFIG`, `APP_SECRETS_YAML`). `../folio-portfolio-api` has the same workflow; keep them
+  alike. `k8s/` and `scripts/deploy-local-k8s.sh` are an optional single-replica Docker Desktop
   workflow (scheduling is instance-local). The `Dockerfile` is multi-stage and builds the jar itself.
 - `../folio-pro-ui` runs this service with the UI and folio-portfolio-api: its `compose.yaml` includes this
   `compose.yaml` (service name `news-scheduler`) and its `scripts/deploy-local-k8s.sh` calls this repository's

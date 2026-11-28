@@ -275,21 +275,30 @@ lives outside Compose. The Kubernetes configuration below targets the same datab
 
 ### CI image build and Kubernetes deployment
 
-The GitHub Actions workflow runs Maven package/tests and builds the Docker image on pushes, pull
-requests, and manual dispatches. Non-PR runs publish commit-tagged and `latest` images to GHCR.
-Pushes to `main` and manual workflow runs also deploy to the `dev` namespace. Configure these
-repository secrets before enabling deployment:
+`.github/workflows/ci-cd.yml` runs on every push, pull request and manual run:
 
-- `KUBE_CONFIG`: kubeconfig contents for the target cluster, with permission to manage the `dev`
-  namespace and its Deployment, Service, Ingress, and Secret.
-- `APP_SECRETS_YAML`: contents of the Spring `application-secrets.yml` file, including database
-  credentials and provider keys.
+| Job | Runs on | Does |
+|---|---|---|
+| Build | every run | `mvn -DskipTests package` |
+| Tests and Docker image | every run | `mvn package` (all tests) and `docker build`; uploads the Surefire reports |
+| Publish image to GHCR | pushes to `main`, manual runs | builds and pushes `ghcr.io/omkarchorghe16/folio-market-feed-svc:<sha>` and `:latest` |
+| Deploy to Kubernetes | only when enabled (below) | applies `k8s/` with the published image to the `dev` namespace |
 
-The deployed image must be pullable by the cluster. Make the GHCR package public or configure an
-image pull secret on the `dev` namespace. The existing manifests target the `dev` namespace, use
-`host.docker.internal:5432/folio_pro` for PostgreSQL, and use an example ingress host; update these
-for the cluster and database before deploying remotely. Keep the deployment at one replica because
-each instance runs the scheduled digest job.
+Deployment is off by default, because there is no cluster GitHub's runners can reach (they cannot reach Docker
+Desktop on a Mac; deploy that with `scripts/deploy-local-k8s.sh`). To deploy to a remote cluster, add under
+**Settings → Secrets and variables → Actions**:
+
+- Variable `KUBE_DEPLOY_ENABLED` = `true`.
+- Secret `KUBE_CONFIG`: kubeconfig contents for the target cluster, with permission to manage the `dev` namespace and
+  its Deployment, Service, Ingress and Secret.
+- Secret `APP_SECRETS_YAML`: contents of the Spring `application-secrets.yml` file, including database credentials and
+  provider keys.
+
+If the variable is set but a secret is missing, the deploy job fails with a message naming it. The deployed image must
+be pullable by the cluster: make the GHCR package public or configure an image pull secret on the `dev` namespace. The
+existing manifests target the `dev` namespace, use `host.docker.internal:5432/folio_pro` for PostgreSQL, and use an
+example ingress host; update these for the cluster and database before deploying remotely. Keep the deployment at one
+replica because each instance runs the scheduled digest job.
 
 ### Deploy to Docker Desktop Kubernetes
 
