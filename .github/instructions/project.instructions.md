@@ -63,7 +63,9 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
   `nasdaqRestClient`; `NasdaqSymbolFileParser` finds columns by header, skips test issues, maps
   `ETF` to `type` and rejects a file without the closing `File Creation Time` line.
   `NasdaqSymbolService` replaces both files only after both parse.
-- Symbol files are on local disk, not in PostgreSQL, and re-downloaded at startup when missing.
+- Symbol files are on local disk, not in PostgreSQL, and re-downloaded at startup when missing. In
+  containers they live in `/app/data`: the `market-feed-data` Compose volume and an `emptyDir` in
+  `k8s/deployment.yaml`.
 - Scheduling and notifications: see the project skill `spring-boot-scheduling-notifications`.
 
 ## Secrets and configuration
@@ -81,7 +83,11 @@ dev-standards) also apply; where this file is more specific, it wins. Edit this 
   environment; requests can have real side effects (digests, provider calls).
 - `.github/workflows/ci-cd.yml` tests, packages and builds a Docker image; it does not publish or
   deploy. `k8s/` and `scripts/deploy-local-k8s.sh` are an optional single-replica Docker Desktop
-  workflow (scheduling is instance-local).
+  workflow (scheduling is instance-local). The `Dockerfile` is multi-stage and builds the jar itself.
+- `../folio-pro-ui` runs this service with the UI and folio-portfolio-api: its `compose.yaml` includes this
+  `compose.yaml` (service name `news-scheduler`) and its `scripts/deploy-local-k8s.sh` calls this repository's
+  script (Service `folio-market-feed-svc` in namespace `dev`). Keep those names, or update the UI repository's
+  nginx routing (`docker/nginx.conf.template`, `k8s/deployment.yaml`) with them.
 
 ## Before finishing
 

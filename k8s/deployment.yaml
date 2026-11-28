@@ -25,6 +25,9 @@ spec:
             - name: SPRING_DATASOURCE_URL
               value: jdbc:postgresql://host.docker.internal:5432/folio_pro
           volumeMounts:
+            # NSE and NASDAQ symbol files. Kept across container restarts; a new pod downloads them again.
+            - name: symbol-data
+              mountPath: /app/data
             - name: app-secrets
               mountPath: /app/application-secrets.yml
               subPath: application-secrets.yml
@@ -50,6 +53,8 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
       volumes:
+        - name: symbol-data
+          emptyDir: {}
         - name: app-secrets
           secret:
             secretName: news-scheduler-secrets

@@ -97,10 +97,6 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: maven
 
-      # The Dockerfile copies a prebuilt jar from target/, which this fresh checkout does not have.
-      - name: Package application
-        run: mvn --batch-mode -DskipTests package
-
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:

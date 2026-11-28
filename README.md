@@ -253,6 +253,13 @@ Start the service from the repository root:
 docker compose up --build -d
 ```
 
+The image builds the jar itself (multi-stage `Dockerfile`), so no local JDK or Maven is needed. NSE and
+NASDAQ symbol files are stored in the `market-feed-data` volume (`/app/data`), so they survive
+`docker compose up --build`; they are downloaded again only when missing.
+
+To run this service together with the UI and folio-portfolio-api, use `docker compose up --build -d` in
+`../folio-pro-ui` (http://localhost:8080); it includes this `compose.yaml` and reads this `.env`.
+
 On your Mac, browse the data with DBeaver, pgAdmin, or IntelliJ's Database tool using `localhost`,
 port `5432`, database `folio_pro`, user `folio_pro`, and schema `public`. With the PostgreSQL
 command-line client:
@@ -303,9 +310,11 @@ scheduled digest job; increasing replicas can send duplicate digests.
 2. Build the image locally; Docker Desktop Kubernetes uses the image from the local Docker engine:
 
    ```bash
-   mvn --batch-mode -DskipTests package
    docker build -t folio-market-feed-svc:local .
    ```
+
+   The multi-stage `Dockerfile` runs the Maven build inside Docker. The pod keeps symbol files in an
+   `emptyDir` volume at `/app/data`: they survive container restarts and a new pod downloads them again.
 
 3. Add your actual PostgreSQL credentials and provider/notification keys to the ignored
    repository-root `application-secrets.yml`. The deploy helper uploads this file as the Kubernetes
@@ -359,11 +368,17 @@ scheduled digest job; increasing replicas can send duplicate digests.
    `http://dev.news-scheduler.example.com`. Otherwise, access the service without ingress:
 
    ```bash
-   kubectl port-forward -n dev service/folio-market-feed-svc 8080:80
+   kubectl port-forward -n dev service/folio-market-feed-svc 8082:80
    ```
 
-   Then use `http://localhost:8080`. Readiness and liveness endpoints are at
-   `/actuator/health/readiness` and `/actuator/health/liveness`.
+   Then use `http://localhost:8082` (the same port as a host run, so the UI's Swagger link works).
+   Readiness and liveness endpoints are at `/actuator/health/readiness` and
+   `/actuator/health/liveness`.
+
+6. To deploy this service, folio-portfolio-api and the UI together, run
+   `bash scripts/deploy-local-k8s.sh` in `../folio-pro-ui`. It builds all three images and calls this
+   script with this `application-secrets.yml`; the UI's nginx (http://localhost:8090) reaches this
+   service as `folio-market-feed-svc.dev.svc.cluster.local`, so no ingress is needed.
 
 ### 1. Clone the Repository
 

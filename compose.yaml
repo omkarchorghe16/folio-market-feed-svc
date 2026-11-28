@@ -11,6 +11,9 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:8082:8082"
+    volumes:
+      # NSE and NASDAQ symbol files survive container rebuilds; they are downloaded again only when missing.
+      - market-feed-data:/app/data
     environment:
       SPRING_PROFILES_ACTIVE: local
       SPRING_DATASOURCE_URL: jdbc:postgresql://host.docker.internal:${POSTGRES_HOST_PORT:-5432}/${POSTGRES_DB:-folio_pro}
@@ -41,3 +44,5 @@ services:
       APP_SCHEDULE_CRON_EXPRESSION: ${APP_SCHEDULE_CRON_EXPRESSION:-0 0 9 * * MON-FRI}
       APP_SCHEDULE_TIMEZONE: ${APP_SCHEDULE_TIMEZONE:-America/Chicago}
 
+volumes:
+  market-feed-data:
